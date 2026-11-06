@@ -197,6 +197,12 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     JSONObject(bytes.toString(Charsets.UTF_8))
                     writer.writeBytes("album_covers.json", bytes)
                 }
+                val appearance = JSONObject().apply {
+                    put("theme", DiaryThemes.load(context))
+                    put("motion", ThemeMotionPreferences.read(context))
+                }
+                writer.writeBytes("preferences/appearance.json",
+                    appearance.toString().toByteArray(Charsets.UTF_8))
                 writer.writeBytes("backup-version.txt",
                     "quietmoments-v2.0-local\n".toByteArray(Charsets.UTF_8))
                 writer.writeBytes("moments.json", payload.toString().toByteArray(Charsets.UTF_8))
@@ -221,6 +227,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             var journalJson: String? = null
             var albumCoversJson: String? = null
             var profileJson: String? = null
+            var appearanceJson: String? = null
             var capsuleJson: String? = null
             val seenZipPaths = mutableSetOf<String>()
             var totalMediaSize = 0L
@@ -241,6 +248,9 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                             } else if (entry.name == "universe/state.json") {
                                 universeJson = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
                                 JSONObject(universeJson!!) // reject invalid JSON before changing local index
+                            } else if (entry.name == "preferences/appearance.json") {
+                                appearanceJson = zip.readBytesLimited(2_048).toString(Charsets.UTF_8)
+                                JSONObject(appearanceJson!!)
                             } else if (entry.name == "profile/about_me.json") {
                                 profileJson = zip.readBytesLimited(32_000).toString(Charsets.UTF_8)
                                 DiaryProfile.fromJson(profileJson!!)
@@ -314,6 +324,9 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             var changedJournal = false
             var changedUniverse = false
             var changedCovers = false
+            val themePrefs = context.getSharedPreferences("diary_theme", Context.MODE_PRIVATE)
+            val shouldImportAppearance = appearanceJson != null && !themePrefs.contains("chosen")
+            var changedAppearance = false
             val oldCapsules = if (capsuleJson != null && (capsuleRepo.index.exists() ||
                 File(capsuleRepo.index.absolutePath + ".bak").exists()))
                 AtomicFile(capsuleRepo.index).openRead().use { it.readBytes() } else null
@@ -411,6 +424,16 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     changedProfile = true
                     profileRepo.save(DiaryProfile.fromJson(profileJson!!))
                 }
+                if (shouldImportAppearance) {
+                    val appearance = JSONObject(appearanceJson!!)
+                    val theme = appearance.getString("theme")
+                    require(DiaryThemes.all.any { it.id == theme })
+                    changedAppearance = true
+                    require(themePrefs.edit()
+                        .putString("chosen", theme)
+                        .putBoolean("motion_enabled", appearance.optBoolean("motion", true))
+                        .commit()) { "Не удалось восстановить настройки оформления" }
+                }
                 // Publish the media catalog only after auxiliary data has been written.
                 store(current + accepted)
             } catch (t: Throwable) {
@@ -427,6 +450,9 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                 if (changedProfile) {
                     profileFile.delete()
                     File(profileFile.absolutePath + ".bak").delete()
+                }
+                if (changedAppearance) {
+                    themePrefs.edit().remove("chosen").remove("motion_enabled").commit()
                 }
                 if (changedCapsules) {
                     if (oldCapsules == null) capsuleRepo.index.delete()
