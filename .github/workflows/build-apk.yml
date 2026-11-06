@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v2.0-data-migration-release]
+    branches: [main, v2.1-google-drive-backup]
   workflow_dispatch:
 
 permissions:
