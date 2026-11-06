@@ -73,11 +73,10 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
         if (token.isBlank()) { error = "Google не предоставил доступ"; busy = false; return }
         scope.launch {
             try {
-                val pair = withContext(Dispatchers.IO) {
-                    val api = GoogleCloudDrive(token)
-                    api.account() to api.backups()
+                // Sign-in is valid even if listing Drive backups fails temporarily.
+                val account = withContext(Dispatchers.IO) {
+                    GoogleCloudDrive(token).account()
                 }
-                val account = pair.first
                 val savedId = prefs.getString("subject", "").orEmpty()
                 if (savedId.isNotEmpty() && savedId != account.id) {
                     error = "Выбран другой аккаунт Google. Сначала отключи прежний аккаунт. " +
@@ -89,10 +88,18 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
                         .putString("name", account.name).apply()
                     email = account.email
                     displayName = account.name
-                    backups = pair.second
                     activeToken = token
                     status = "Аккаунт Google подключён. Копии доступны только этому приложению."
                     error = ""
+                    try {
+                        backups = withContext(Dispatchers.IO) {
+                            GoogleCloudDrive(token).backups()
+                        }
+                    } catch (listError: Throwable) {
+                        backups = emptyList()
+                        error = "Google подключён, но список копий временно недоступен: " +
+                            (listError.localizedMessage ?: "проверь интернет")
+                    }
                 }
             } catch (t: Throwable) {
                 error = t.localizedMessage ?: "Не удалось подключиться к Google"
@@ -182,7 +189,12 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
                 status = if (backup.third) "Сохранено в Google: " + backup.first.name
                     else "Копия сохранена в Google, но появились новые изменения. " +
                         "Повтори сохранение, чтобы они тоже попали в облако."
-                backups = withContext(Dispatchers.IO) { GoogleCloudDrive(token).backups() }
+                try {
+                    backups = withContext(Dispatchers.IO) { GoogleCloudDrive(token).backups() }
+                } catch (listError: Throwable) {
+                    error = "Копия сохранена, но список временно не обновился: " +
+                        (listError.localizedMessage ?: "проверь интернет")
+                }
             } catch (t: Throwable) {
                 error = t.localizedMessage ?: "Ошибка облачного сохранения"
                 status = "Копия не подтверждена Google. Локальные записи сохранены."
