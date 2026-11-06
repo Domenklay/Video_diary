@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
@@ -59,6 +60,8 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
     var showTrash by rememberSaveable { mutableStateOf(false) }
     var deleteId by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<LocalMoment?>(null) }
+    var editingCover by remember { mutableStateOf<String?>(null) }
+    var coverRevision by remember { mutableStateOf(0) }
     var editTitle by remember { mutableStateOf("") }
     var editAlbum by remember { mutableStateOf("") }
     var editDate by remember { mutableStateOf("") }
@@ -180,7 +183,24 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         confirmButton = { TextButton(onClick = { val id = deleteId!!; deleteId = null; runTask { repo.deleteForever(id); "Удалено" } }) { Text("Удалить") } },
         dismissButton = { TextButton(onClick = { deleteId = null }) { Text("Отмена") } }
     )
-    val albums = listOf("Все") + moments.filter { it.deletedAt == 0L }.map { it.album }.distinct().sorted()
+    if (editingCover != null) {
+        val chosenAlbum = editingCover!!
+        val currentCover = remember(chosenAlbum, coverRevision, palette.id) {
+            repo.albumCoverStyle(chosenAlbum, palette.id)
+        }
+        AlbumCoverPicker(
+            albumName = chosenAlbum,
+            currentStyle = currentCover,
+            onChoose = { style ->
+                runCatching { repo.setAlbumCoverStyle(chosenAlbum, style) }
+                    .onSuccess { coverRevision++; editingCover = null }
+                    .onFailure { error = it.localizedMessage ?: "Не удалось сменить обложку" }
+            },
+            onDismiss = { editingCover = null }
+        )
+    }
+    val liveMoments = moments.filter { it.deletedAt == 0L }
+    val albums = listOf("Все") + liveMoments.map { it.album }.distinct().sorted()
     val shown = moments.filter {
         (it.deletedAt != 0L) == showTrash &&
             (showTrash || selectedAlbum == "Все" || it.album == selectedAlbum)
@@ -256,10 +276,36 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
-        ScrollableTabRow(selectedTabIndex = albums.indexOf(selectedAlbum).coerceAtLeast(0)) {
-            albums.forEach { name ->
-                Tab(selected = selectedAlbum == name, onClick = { selectedAlbum = name },
-                    text = { Text(name) })
+        if (!showTrash && albums.size > 1) {
+            Text("Иллюстрированные обложки", style = MaterialTheme.typography.titleMedium)
+            Text("Нажми на альбом, чтобы открыть, или на карандаш, чтобы сменить рисунок.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 5.dp)) {
+                items(albums.drop(1), key = { it }) { albumName ->
+                    val cover = remember(albumName, coverRevision, palette.id) {
+                        repo.albumCoverStyle(albumName, palette.id)
+                    }
+                    val related = remember(liveMoments, albumName) {
+                        liveMoments.filter { it.album == albumName }
+                    }
+                    AlbumCoverCard(
+                        repo = repo, name = albumName, count = related.size,
+                        previewMoment = related.maxByOrNull { it.createdAt },
+                        coverId = cover, selected = selectedAlbum == albumName,
+                        onOpen = { selectedAlbum = albumName },
+                        onEdit = { editingCover = albumName }
+                    )
+                }
+            }
+        }
+        if (!showTrash) {
+            ScrollableTabRow(selectedTabIndex = albums.indexOf(selectedAlbum).coerceAtLeast(0)) {
+                albums.forEach { name ->
+                    Tab(selected = selectedAlbum == name, onClick = { selectedAlbum = name },
+                        text = { Text(name) })
+                }
             }
         }
         IllustratedSectionHeader(
@@ -292,8 +338,9 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                             palette, Modifier.matchParentSize(), preview = true, alpha = .23f
                         )
                         Box(Modifier.matchParentSize().background(
-                            palette.surface.copy(alpha = .78f)
+                            palette.surface.copy(alpha = .82f)
                         ))
+                        DecorativeFrame(palette, Modifier.matchParentSize(), subtle = true)
                         Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             MomentThumbnail(repo, moment)
