@@ -267,12 +267,17 @@ public final class UniverseActivity extends Activity {
                 JSONObject state = new JSONObject(json);
                 File root = new File(getFilesDir(), "universe_backup");
                 if (!root.exists() && !root.mkdirs()) return;
+                File dest = new File(root, "snapshot.json");
+                byte[] bytes = state.toString().getBytes(StandardCharsets.UTF_8);
+                // Initialising the WebView used to fsync the same snapshot at
+                // every launch. Keep on-disk data unchanged if content matches.
+                if (dest.isFile() && dest.length() == bytes.length &&
+                    java.util.Arrays.equals(Files.readAllBytes(dest.toPath()), bytes)) return;
                 File temp = new File(root, "snapshot.pending");
                 try (FileOutputStream stream = new FileOutputStream(temp)) {
-                    stream.write(state.toString().getBytes(StandardCharsets.UTF_8));
+                    stream.write(bytes);
                     stream.getFD().sync();
                 }
-                File dest = new File(root, "snapshot.json");
                 if (!temp.renameTo(dest)) {
                     Files.copy(temp.toPath(), dest.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                     temp.delete();
