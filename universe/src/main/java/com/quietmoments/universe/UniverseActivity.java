@@ -45,6 +45,7 @@ public final class UniverseActivity extends Activity {
         web.addJavascriptInterface(new StorageBridge(), "AndroidExport");
         web.addJavascriptInterface(new UniverseBackupBridge(), "UniverseBackup");
         web.addJavascriptInterface(new DiaryBridge(), "DiaryHost");
+        web.addJavascriptInterface(new AppNavigationBridge(), "AppNav");
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return true; // no external navigation from offline content
@@ -95,6 +96,29 @@ public final class UniverseActivity extends Activity {
                 if (!pending.delete()) return "";
                 return json;
             } catch (Exception ignored) { return ""; }
+        }
+    }
+
+    /** Bottom navigation shared with the native diary. Never changes persisted diary data. */
+    private final class AppNavigationBridge {
+        @JavascriptInterface public void openTab(String tab) {
+            if (tab == null) return;
+            runOnUiThread(() -> {
+                String action;
+                switch (tab) {
+                    case "home": action = "NAVIGATE_HOME"; break;
+                    case "diary": action = "NAVIGATE_DIARY"; break;
+                    case "settings": action = "NAVIGATE_SETTINGS"; break;
+                    default: return;
+                }
+                Intent result = new Intent();
+                result.putExtra(RESULT_ACTION, action);
+                if ("diary".equals(tab)) {
+                    result.putExtra(RESULT_DATE, java.time.LocalDate.now().toString());
+                }
+                setResult(RESULT_OK, result);
+                finish();
+            });
         }
     }
 
