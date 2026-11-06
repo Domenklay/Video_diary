@@ -31,7 +31,8 @@ fun CloudHubScreen(
     onGoogle: () -> Unit,
     onYandex: () -> Unit,
     onManual: () -> Unit,
-    onTransfer: () -> Unit
+    onTransfer: () -> Unit,
+    onProtected: () -> Unit
 ) {
     val context = LocalContext.current
     val palette = LocalDiaryPalette.current
@@ -105,6 +106,16 @@ fun CloudHubScreen(
             }
             TextButton(onClick = onTransfer, modifier = Modifier.fillMaxWidth()) {
                 Text("Перенос из старой версии")
+            }
+        }
+        DiarySectionCard {
+            Text("Защищённый архив .qmb", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold)
+            Text("Шифрование по отдельному паролю. Можно сохранять в любую папку, " +
+                "включая Google Диск и Яндекс Диск через выбор файлов Android.",
+                style = MaterialTheme.typography.bodySmall)
+            Button(onClick = onProtected, modifier = Modifier.fillMaxWidth()) {
+                Text("Создать защищённую копию")
             }
         }
         DiarySectionCard {
