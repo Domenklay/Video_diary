@@ -96,8 +96,14 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     val context = LocalContext.current
     val lock = remember { DiaryPinLock(context) }
     var unlocked by rememberSaveable { mutableStateOf(!lock.isEnabled()) }
-    var currentTab by rememberSaveable { mutableStateOf("home") }
-    var profileBackTab by rememberSaveable { mutableStateOf("settings") }
+    val introPrefs = remember(context) { context.getSharedPreferences("diary_onboarding", 0) }
+    var currentTab by rememberSaveable {
+        mutableStateOf(if (introPrefs.getBoolean("questionnaire_seen", false)) "home" else "profile")
+    }
+    var profileBackTab by rememberSaveable { mutableStateOf("home") }
+    LaunchedEffect(Unit) {
+        introPrefs.edit().putBoolean("questionnaire_seen", true).apply()
+    }
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val tabStateHolder = rememberSaveableStateHolder()
 
@@ -169,9 +175,9 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
             }
             // A translucent wash keeps text readable over detailed flowers and patterns.
             Box(Modifier.fillMaxSize().background(
-                palette.page.copy(alpha = if (palette.dark) .58f else .71f)
+                palette.page.copy(alpha = if (palette.dark) .24f else .32f)
             ))
-            LivingThemeParticles(palette, Modifier.fillMaxSize(), strength = .38f)
+            LivingThemeParticles(palette, Modifier.fillMaxSize(), strength = .54f)
             tabStateHolder.SaveableStateProvider(currentTab) {
                 when (currentTab) {
                     "diary" -> LocalMomentsScreen(
@@ -539,7 +545,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v1.8.1 · анкета и контрастный интерфейс", style = MaterialTheme.typography.bodySmall)
+            Text("v1.8.2 · персональная анкета и живые иллюстрации", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
