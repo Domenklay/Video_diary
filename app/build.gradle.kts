@@ -27,6 +27,11 @@ android {
         }
     }
     buildTypes {
+        debug {
+            // Install preview beside existing versions; never replace private data without a stable key.
+            applicationIdSuffix = ".preview12"
+            versionNameSuffix = "-preview"
+        }
         release {
             isMinifyEnabled = false
             if (!stableSigningPath.isNullOrBlank()) {
