@@ -137,22 +137,15 @@ class TimeCapsuleRepository(private val context: Context, uid: String) {
         return FileProvider.getUriForFile(context, context.packageName + ".fileprovider", f)
     }
 
-    fun writeBackup(zip: ZipOutputStream) {
+    fun writeBackup(writer: BackupZipWriter) {
         val items = all()
         for (c in items) {
             if (c.attachment.isNotEmpty()) {
-                val f = File(directory, c.attachment)
-                require(f.isFile && f.length() <= MAX_MEDIA_BYTES) {
-                    "Не найдено вложение капсулы: " + c.title
-                }
-                zip.putNextEntry(ZipEntry("capsules/media/" + c.attachment))
-                f.inputStream().use { it.copyTo(zip) }
-                zip.closeEntry()
+                val file = File(directory, c.attachment)
+                writer.writeFile("capsules/media/" + c.attachment, file, MAX_MEDIA_BYTES)
             }
         }
-        zip.putNextEntry(ZipEntry("capsules/manifest.json"))
-        zip.write(encode(items).toByteArray(Charsets.UTF_8))
-        zip.closeEntry()
+        writer.writeBytes("capsules/manifest.json", encode(items).toByteArray(Charsets.UTF_8))
     }
 
     /** Staged, validated import; caller coordinates undo with other backup sections. */
