@@ -10,8 +10,10 @@ android {
         applicationId = "com.quietmoments.universeoffline"
         minSdk = 26
         targetSdk = 35
-        versionCode = 250
-        versionName = "2.5.0-universe-fast-navigation"
+        // Public OAuth client identifier; no secret or user credentials are bundled.
+        manifestPlaceholders["YANDEX_CLIENT_ID"] = "51b8d2a4853c4d2ba4a908cebd748281"
+        versionCode = 260
+        versionName = "2.6.0-yandex-disk"
     }
     val stableSigningPath = System.getenv("QM_KEYSTORE_PATH")
     signingConfigs {
@@ -30,7 +32,7 @@ android {
     buildTypes {
         debug {
             // Install preview beside existing versions; never replace private data without a stable key.
-            applicationIdSuffix = ".preview250"
+            applicationIdSuffix = ".preview260"
             versionNameSuffix = "-preview"
         }
         release {
@@ -47,6 +49,7 @@ android {
 dependencies {
     implementation(project(":universe"))
     implementation("com.google.android.gms:play-services-auth:22.0.0")
+    implementation("com.yandex.android:authsdk:3.1.3")
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.ui:ui")

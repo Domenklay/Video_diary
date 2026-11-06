@@ -280,6 +280,13 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             currentTab = "drive"
                         }
                     )
+                    "yandex" -> YandexCloudAccountScreen(
+                        onBack = { currentTab = "settings" },
+                        onAppearanceRestored = { id, enabled ->
+                            onSelectTheme(id)
+                            onMotionChange(enabled)
+                        }
+                    )
                     "drive" -> GoogleDriveBackupScreen(
                         onBack = { currentTab = driveBackTab },
                         onAppearanceRestored = { id, enabled ->
@@ -307,6 +314,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             cloudBackTab = "settings"
                             currentTab = "cloud"
                         },
+                        onOpenYandexDisk = { currentTab = "yandex" },
                         onOpenProfile = { profileBackTab = "settings"; currentTab = "profile" },
                         themeId = themeId, onSelectTheme = onSelectTheme,
                         motionEnabled = motionEnabled, onMotionChange = onMotionChange)
@@ -589,7 +597,8 @@ private fun DashboardTile(
 @Composable
 private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
     onOpenTransfer: () -> Unit, onOpenGoogleDrive: () -> Unit,
-    onOpenGoogleAccount: () -> Unit, onOpenProfile: () -> Unit,
+    onOpenGoogleAccount: () -> Unit, onOpenYandexDisk: () -> Unit,
+    onOpenProfile: () -> Unit,
     themeId: String, onSelectTheme: (String) -> Unit,
     motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
     val palette = LocalDiaryPalette.current
@@ -677,6 +686,22 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         }
         DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Cloud, contentDescription = null, tint = palette.primary)
+                Spacer(Modifier.width(10.dp))
+                Text("Яндекс Диск", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+            }
+            Text("Отдельные резервные копии через Яндекс ID. " +
+                "Доступ только к папке QuietMoments, без доступа к другим файлам.")
+            Button(onClick = onOpenYandexDisk, modifier = Modifier.fillMaxWidth()) {
+                Text("Подключить Яндекс Диск")
+            }
+            Text("Ручное сохранение, просмотр и восстановление ZIP-копий.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        DiarySectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CloudDownload, contentDescription = null, tint = palette.primary)
                 Spacer(Modifier.width(10.dp))
                 Text("Резервные копии", style = MaterialTheme.typography.titleMedium)
@@ -693,7 +718,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v2.5 · быстрое переключение «Моей вселенной»", style = MaterialTheme.typography.bodySmall)
+            Text("v2.6 · Google и Яндекс Диск", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
