@@ -67,7 +67,7 @@ public final class UniverseActivity extends Activity {
                     ("rose".equals(theme) ? Color.rgb(255,244,246) :
                      "forest".equals(theme) ? Color.rgb(241,248,242) :
                      "sea".equals(theme) ? Color.rgb(240,249,252) :
-                     "dawn".equals(theme) ? Color.rgb(255,248,235) : Color.rgb(250,244,252))));
+                     "dawn".equals(theme) ? Color.rgb(255,248,235) : Color.rgb(250,244,252)));
                 getWindow().setNavigationBarColor(dark ? Color.rgb(22,38,51) : Color.rgb(255,251,255));
                 getWindow().getDecorView().setSystemUiVisibility(dark ? 0 :
                     android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR |
