@@ -9,6 +9,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -157,19 +158,51 @@ object GoogleCloudFiles {
         UUID.randomUUID().toString() + ".zip")
     fun uri(context: Context, file: File): Uri =
         FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+    /**
+     * A stable snapshot of every local file included in a backup.
+     * The old newest-timestamp + total-length checksum could miss changes in an
+     * older record when the newest file remained unchanged. Never read large
+     * videos/photos just to check whether an automatic upload is needed.
+     */
     fun fingerprint(context: Context): String {
-        var newest = 0L
-        var total = 0L
-        var count = 0
-        for (folder in listOf(File(context.filesDir, "local_moments/offline"),
-            File(context.filesDir, "universe_backup"))) {
-            folder.walkTopDown().filter { it.isFile }.forEach {
-                newest = maxOf(newest, it.lastModified())
-                total += it.length()
-                count++
+        val digest = MessageDigest.getInstance("SHA-256")
+        val sources = listOf(
+            "moments" to File(context.filesDir, "local_moments/offline"),
+            "universe" to File(context.filesDir, "universe_backup")
+        )
+        sources.forEach { (scope, folder) ->
+            if (folder.isDirectory) {
+                folder.walkTopDown()
+                    .filter { file ->
+                        file.isFile && !file.relativeTo(folder).invariantSeparatorsPath
+                            .startsWith("restore_")
+                    }
+                    .sortedBy { it.relativeTo(folder).invariantSeparatorsPath }
+                    .forEach { file ->
+                        val relative = file.relativeTo(folder).invariantSeparatorsPath
+                        val identity = "$scope/$relative:" + file.length() + ":" +
+                            file.lastModified() + "\n"
+                        digest.update(identity.toByteArray(Charsets.UTF_8))
+                        // Metadata can change without changing length or mtime.
+                        // Content-check the small JSON files, not media recordings.
+                        if (file.extension == "json" && file.length() <= 2_000_000L) {
+                            file.inputStream().use { input ->
+                                val chunk = ByteArray(16 * 1024)
+                                while (true) {
+                                    val read = input.read(chunk)
+                                    if (read < 0) break
+                                    digest.update(chunk, 0, read)
+                                }
+                            }
+                        }
+                    }
             }
         }
-        return newest.toString() + "/" + total + "/" + count + "/" +
-            DiaryThemes.load(context) + "/" + ThemeMotionPreferences.read(context)
+        val appearance = "theme=" + DiaryThemes.load(context) +
+            ";motion=" + ThemeMotionPreferences.read(context)
+        digest.update(appearance.toByteArray(Charsets.UTF_8))
+        return "v2:" + digest.digest().joinToString("") { b ->
+            (b.toInt() and 255).toString(16).padStart(2, '0')
+        }
     }
 }
