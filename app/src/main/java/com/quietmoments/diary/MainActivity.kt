@@ -166,7 +166,11 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                     alignment = Alignment.TopCenter
                 )
             }
-            LivingThemeParticles(palette, Modifier.fillMaxSize(), strength = .60f)
+            // A translucent wash keeps text readable over detailed flowers and patterns.
+            Box(Modifier.fillMaxSize().background(
+                palette.page.copy(alpha = if (palette.dark) .58f else .71f)
+            ))
+            LivingThemeParticles(palette, Modifier.fillMaxSize(), strength = .38f)
             tabStateHolder.SaveableStateProvider(currentTab) {
                 when (currentTab) {
                     "diary" -> LocalMomentsScreen(
@@ -175,6 +179,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         onOpenMoods = { currentTab = "moods" }
                     )
                     "capsules" -> TimeCapsuleScreen(onBack = { currentTab = "home" })
+                    "profile" -> AboutMeQuestionnaire(onBack = { currentTab = "settings" })
                     "moods" -> MoodInsightsScreen(
                         onBack = { currentTab = "home" },
                         onOpenDay = { selected ->
@@ -182,13 +187,16 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             currentTab = "diary"
                         }
                     )
-                    "settings" -> DiarySettingsPage(lock, onOpenDiary = { currentTab = "diary" },
+                    "settings" -> DiarySettingsPage(lock,
+                        onOpenDiary = { currentTab = "diary" },
+                        onOpenProfile = { currentTab = "profile" },
                         themeId = themeId, onSelectTheme = onSelectTheme,
                         motionEnabled = motionEnabled, onMotionChange = onMotionChange)
                     else -> DiaryHomePage(
                         onOpenDiary = { currentTab = "diary" },
                         onOpenUniverse = { openUniverse() },
                         onOpenSettings = { currentTab = "settings" },
+                        onOpenProfile = { currentTab = "profile" },
                         onOpenCapsules = { currentTab = "capsules" },
                         onOpenMoods = { currentTab = "moods" },
                         onOpenDay = { selected ->
@@ -212,13 +220,20 @@ private fun DiaryHomePage(
     onOpenDiary: () -> Unit,
     onOpenUniverse: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenProfile: () -> Unit,
     onOpenCapsules: () -> Unit,
     onOpenMoods: () -> Unit,
     onOpenDay: (String) -> Unit
 ) {
     val palette = LocalDiaryPalette.current
     val context = LocalContext.current
+    var profile by remember { mutableStateOf(DiaryProfile()) }
     var counts by remember { mutableStateOf(DiaryCounts(0, 0, null)) }
+    LaunchedEffect(Unit) {
+        profile = withContext(Dispatchers.IO) {
+            runCatching { DiaryProfileRepository(context).read() }.getOrDefault(DiaryProfile())
+        }
+    }
     LaunchedEffect(Unit) {
         counts = withContext(Dispatchers.IO) {
             runCatching {
@@ -265,8 +280,11 @@ private fun DiaryHomePage(
             Column(Modifier.weight(1f)) {
                 Text("ТИХИЕ МОМЕНТЫ", color = palette.primary, fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.labelMedium)
-                Text("Моё пространство", style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.SemiBold, color = palette.text)
+                Text(if (profile.nickname.isNotBlank()) "Мир " + profile.nickname
+                     else "Моё пространство",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.SemiBold, color = palette.text,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(LocalDate.now().format(DateTimeFormatter.ofPattern("d MMMM, EEEE", Locale("ru"))),
                     color = palette.muted, style = MaterialTheme.typography.bodySmall)
             }
@@ -313,6 +331,27 @@ private fun DiaryHomePage(
             DashboardNumber("Записей дня", counts.days.toString(), Icons.Default.CalendarMonth, Modifier.weight(1f))
         }
 
+        DiarySectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AccountCircle, contentDescription = null,
+                    modifier = Modifier.size(32.dp), tint = palette.primary)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(if (profile.hasContent) "Моя анкета" else "Давай познакомимся",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold, color = palette.text)
+                    Text(if (profile.hasContent && profile.diaryWish.isNotBlank())
+                            profile.diaryWish
+                         else "Имя, дорогие воспоминания, мечты и цели дневника",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2)
+                }
+                FilledTonalButton(onClick = onOpenProfile) {
+                    Text(if (profile.hasContent) "Открыть" else "Заполнить")
+                }
+            }
+        }
         Text("Мои разделы", style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold, color = palette.text)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -431,6 +470,7 @@ private fun DashboardTile(
 
 @Composable
 private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
+    onOpenProfile: () -> Unit,
     themeId: String, onSelectTheme: (String) -> Unit,
     motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
     val palette = LocalDiaryPalette.current
@@ -439,6 +479,23 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         LocalDiaryHeading("Настройки", "Персонализация и защита твоих воспоминаний")
+        DiarySectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.PersonOutline, contentDescription = null,
+                    tint = palette.primary, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Анкета «Обо мне»", style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold)
+                    Text("Личная история, мечты и любимые темы",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Button(onClick = onOpenProfile, modifier = Modifier.fillMaxWidth()) {
+                Text("Открыть мою анкету")
+            }
+        }
         ThemeGallery(selectedId = themeId, onSelect = onSelectTheme)
         DiarySectionCard {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -481,7 +538,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v1.8 · страницы, капсулы времени и настроение", style = MaterialTheme.typography.bodySmall)
+            Text("v1.8.1 · анкета и контрастный интерфейс", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
