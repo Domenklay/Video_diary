@@ -37,13 +37,25 @@ object GoogleCloudAutoSync {
             require(cloud.account().id == expected) {
                 "Аккаунт Google изменился: резервное копирование остановлено"
             }
+            // The fingerprint must describe the files BEFORE the backup starts.
+            // Otherwise edits made during the upload could be incorrectly marked
+            // as backed up and never uploaded on the next check.
+            val before = GoogleCloudFiles.fingerprint(context)
             val temp = GoogleCloudFiles.newFile(context)
             try {
                 LocalMediaRepository(context, "offline").exportBackup(GoogleCloudFiles.uri(context, temp))
+                val afterExport = GoogleCloudFiles.fingerprint(context)
                 val backup = cloud.upload(temp)
-                prefs.edit().putString("fingerprint", GoogleCloudFiles.fingerprint(context))
+                val afterUpload = GoogleCloudFiles.fingerprint(context)
+                val unchanged = CloudSnapshotFingerprint.unchangedDuringUpload(before, afterExport, afterUpload)
+                prefs.edit().putString("fingerprint", if (unchanged) before else "")
                     .putLong("last_success", System.currentTimeMillis())
-                    .putString("auto_status", "Последняя копия: " + backup.name).apply()
+                    .putString("auto_status", if (unchanged) {
+                        "Последняя копия: " + backup.name
+                    } else {
+                        "Копия отправлена, но во время сохранения появились изменения. " +
+                            "Они будут загружены при следующей проверке."
+                    }).apply()
             } finally { temp.delete() }
         } catch (t: Throwable) {
             prefs.edit().putString("auto_status", "Автосохранение не выполнено: " +

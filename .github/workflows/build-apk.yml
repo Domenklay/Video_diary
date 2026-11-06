@@ -2,11 +2,15 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v2.2-google-account-sync]
+    branches: [main, v2.2-google-account-sync, v2.3-backup-reliability]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -38,6 +42,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Verify cloud backup snapshot invariants
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
       - name: Compile debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - name: Restore optional stable signing key

@@ -157,19 +157,19 @@ object GoogleCloudFiles {
         UUID.randomUUID().toString() + ".zip")
     fun uri(context: Context, file: File): Uri =
         FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+    /**
+     * A stable snapshot of every local file included in a backup.
+     * The old newest-timestamp + total-length checksum could miss changes in an
+     * older record when the newest file remained unchanged. Never read large
+     * videos/photos just to check whether an automatic upload is needed.
+     */
     fun fingerprint(context: Context): String {
-        var newest = 0L
-        var total = 0L
-        var count = 0
-        for (folder in listOf(File(context.filesDir, "local_moments/offline"),
-            File(context.filesDir, "universe_backup"))) {
-            folder.walkTopDown().filter { it.isFile }.forEach {
-                newest = maxOf(newest, it.lastModified())
-                total += it.length()
-                count++
-            }
-        }
-        return newest.toString() + "/" + total + "/" + count + "/" +
-            DiaryThemes.load(context) + "/" + ThemeMotionPreferences.read(context)
+        val sources = listOf(
+            "moments" to File(context.filesDir, "local_moments/offline"),
+            "universe" to File(context.filesDir, "universe_backup")
+        )
+        val appearance = "theme=" + DiaryThemes.load(context) +
+            ";motion=" + ThemeMotionPreferences.read(context)
+        return CloudSnapshotFingerprint.calculate(sources, appearance)
     }
 }
