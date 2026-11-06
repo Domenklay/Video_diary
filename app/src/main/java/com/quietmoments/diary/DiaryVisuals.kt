@@ -28,7 +28,10 @@ fun UniverseBanner(onOpen: () -> Unit, modifier: Modifier = Modifier) {
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = palette.heroStart)) {
         Box(Modifier.background(Brush.linearGradient(listOf(palette.heroStart, palette.heroEnd))).fillMaxWidth()) {
-            ThemeOrnament(palette, modifier = Modifier.matchParentSize())
+            IllustratedThemeBackground(palette, modifier = Modifier.matchParentSize(), alpha = 0.85f)
+            Box(Modifier.matchParentSize().background(
+                Brush.verticalGradient(listOf(Color(0x66201530), Color(0xDD1B1630)))
+            ))
             Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically,
