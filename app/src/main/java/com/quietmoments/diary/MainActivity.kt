@@ -112,8 +112,13 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     val lock = remember { DiaryPinLock(context) }
     var unlocked by rememberSaveable { mutableStateOf(!lock.isEnabled()) }
     val introPrefs = remember(context) { context.getSharedPreferences("diary_onboarding", 0) }
+    val migrationPrefs = remember(context) { context.getSharedPreferences("diary_migration", 0) }
     var currentTab by rememberSaveable {
-        mutableStateOf(if (introPrefs.getBoolean("questionnaire_seen", false)) "home" else "profile")
+        mutableStateOf(
+            if (!migrationPrefs.getBoolean("transfer_screen_seen", false)) "transfer"
+            else if (introPrefs.getBoolean("questionnaire_seen", false)) "home"
+            else "profile"
+        )
     }
     var profileBackTab by rememberSaveable { mutableStateOf("home") }
 
@@ -201,8 +206,14 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                     "diary" -> LocalMomentsScreen(
                         uid = "offline", pinLock = lock, initialDate = chosenDate,
                         onClose = { currentTab = "home" },
-                        onOpenMoods = { currentTab = "moods" }
+                        onOpenMoods = { currentTab = "moods" },
+                        onOpenTransfer = { currentTab = "transfer" }
                     )
+                    "transfer" -> DataTransferScreen(onFinished = {
+                        migrationPrefs.edit().putBoolean("transfer_screen_seen", true).apply()
+                        currentTab = if (introPrefs.getBoolean("questionnaire_seen", false)) "home"
+                            else "profile"
+                    })
                     "capsules" -> TimeCapsuleScreen(onBack = { currentTab = "home" })
                     "profile" -> AboutMeQuestionnaire(onBack = { currentTab = profileBackTab })
                     "moods" -> MoodInsightsScreen(
@@ -214,6 +225,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                     )
                     "settings" -> DiarySettingsPage(lock,
                         onOpenDiary = { currentTab = "diary" },
+                        onOpenTransfer = { currentTab = "transfer" },
                         onOpenProfile = { profileBackTab = "settings"; currentTab = "profile" },
                         themeId = themeId, onSelectTheme = onSelectTheme,
                         motionEnabled = motionEnabled, onMotionChange = onMotionChange)
@@ -495,7 +507,7 @@ private fun DashboardTile(
 
 @Composable
 private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
-    onOpenProfile: () -> Unit,
+    onOpenTransfer: () -> Unit, onOpenProfile: () -> Unit,
     themeId: String, onSelectTheme: (String) -> Unit,
     motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
     val palette = LocalDiaryPalette.current
@@ -554,16 +566,19 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
                 Spacer(Modifier.width(10.dp))
                 Text("Резервные копии", style = MaterialTheme.typography.titleMedium)
             }
-            Text("Создание и восстановление ZIP находится в разделе «Дневник».",
+            Text("Проверка архивов, резервное копирование и перенос из предыдущих версий.",
                 style = MaterialTheme.typography.bodyMedium)
-            Button(onClick = onOpenDiary, shape = RoundedCornerShape(15.dp)) {
-                Text("Перейти к копиям")
+            Button(onClick = onOpenTransfer, shape = RoundedCornerShape(15.dp)) {
+                Text("Открыть перенос данных")
             }
+            Text("Новая стабильная установка не может читать файлы старых preview-приложений напрямую.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall)
         }
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v1.8.2 · персональная анкета и живые иллюстрации", style = MaterialTheme.typography.bodySmall)
+            Text("v2.0 · перенос данных и проверяемые резервные копии", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
