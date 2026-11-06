@@ -245,6 +245,11 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                                 journalJson = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
                                 val j = JSONArray(journalJson!!)
                                 require(j.length() <= 50000)
+                                // Reject malformed dates before any imported media is copied.
+                                // Preserve existing diary answers on every later import.
+                                for (index in 0 until j.length()) {
+                                    LocalDate.parse(j.getJSONObject(index).getString("date"))
+                                }
                             } else if (entry.name == "universe/state.json") {
                                 universeJson = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
                                 JSONObject(universeJson!!) // reject invalid JSON before changing local index
@@ -313,7 +318,13 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             val journalTarget = File(root, "reflections.json")
             val oldJournal = if (journalJson != null && journalTarget.exists()) journalTarget.readBytes() else null
             val universeTarget = File(context.filesDir, "universe_backup/restore.json")
-            val oldUniverse = if (universeJson != null && universeTarget.exists()) universeTarget.readBytes() else null
+            val universeSnapshot = File(context.filesDir, "universe_backup/snapshot.json")
+            // Never queue a destructive restore over a real Universe snapshot
+            // or over a restore the user has not yet opened.
+            val canRestoreUniverse = universeJson != null &&
+                SafeRestorePolicy.canQueueUniverseRestore(
+                    universeSnapshot.isFile, universeTarget.isFile
+                )
             val oldCovers = if (albumCoversJson != null && albumCovers.exists()) albumCovers.readBytes() else null
             val profileRepo = DiaryProfileRepository(context, uidKey)
             val profileFile = profileRepo.file
@@ -363,12 +374,12 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                 // Journal merge: existing dates win; imported entries fill gaps only.
                 journalJson?.let { json ->
                     val journal = LocalJournal(context, uidKey)
-                    val seen = journal.all().map { it.date }.toSet()
+                    val seen = journal.all().map { it.date }.toMutableSet()
                     val imported = JSONArray(json)
                     for (i in 0 until imported.length()) {
                         val record = imported.getJSONObject(i)
                         val date = record.getString("date")
-                        if (date !in seen) { changedJournal = true; journal.save(DailyReflection(
+                        if (seen.add(date)) { changedJournal = true; journal.save(DailyReflection(
                             date, record.optString("question").take(500),
                             record.optString("answer").take(10000), record.optString("mood").take(50),
                             record.optString("reason").take(2000))) }
@@ -376,18 +387,21 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                 }
                 // Opt-in import restores Universe data on the next opening of its WebView.
                 // Preserve current universe snapshot as a separate recovery file.
-                universeJson?.let { json ->
+                if (canRestoreUniverse) {
+                    val json = requireNotNull(universeJson)
                     val universeDir = File(context.filesDir, "universe_backup").apply { mkdirs() }
-                    val currentUniverse = File(universeDir, "snapshot.json")
-                    if (currentUniverse.exists()) currentUniverse.copyTo(File(universeDir, "before_import.json"), overwrite = true)
                     val pending = File(universeDir, "restore.pending")
-                    changedUniverse = true
-                    pending.writeText(json, Charsets.UTF_8)
-                    if (!pending.renameTo(File(universeDir, "restore.json"))) {
-                        pending.copyTo(File(universeDir, "restore.json"), overwrite = true)
+                    try {
+                        pending.writeText(json, Charsets.UTF_8)
+                        require(!universeTarget.exists()) { "Сохранение «Моей вселенной» уже ожидает восстановления" }
+                        // Mark before publishing: a failure during the rename is rolled back.
+                        changedUniverse = true
+                        if (!pending.renameTo(universeTarget)) {
+                            pending.copyTo(universeTarget, overwrite = false)
+                        }
+                    } finally {
                         pending.delete()
                     }
-                    changedUniverse = true
                 }
                 albumCoversJson?.let { data ->
                     // Existing album choices win; imported choices fill missing names.
@@ -442,7 +456,9 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     if (oldJournal == null) journalTarget.delete() else writeAtomic(journalTarget, oldJournal)
                 }
                 if (changedUniverse) {
-                    if (oldUniverse == null) universeTarget.delete() else writeAtomic(universeTarget, oldUniverse)
+                    // This import only creates a new pending restore; it never
+                    // replaces an existing one or the current Universe snapshot.
+                    universeTarget.delete()
                 }
                 if (changedCovers) {
                     if (oldCovers == null) albumCovers.delete() else writeAtomic(albumCovers, oldCovers)
