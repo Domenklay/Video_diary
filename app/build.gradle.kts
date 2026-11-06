@@ -13,7 +13,27 @@ android {
         versionCode = 12
         versionName = "1.2.0-offline-universe"
     }
-    buildTypes { release { isMinifyEnabled = false } }
+    val stableSigningPath = System.getenv("QM_KEYSTORE_PATH")
+    signingConfigs {
+        if (!stableSigningPath.isNullOrBlank()) {
+            create("stableRelease") {
+                storeFile = file(stableSigningPath)
+                storePassword = System.getenv("QM_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("QM_KEY_ALIAS")
+                keyPassword = System.getenv("QM_KEY_PASSWORD")
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            if (!stableSigningPath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("stableRelease")
+            }
+        }
+    }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
