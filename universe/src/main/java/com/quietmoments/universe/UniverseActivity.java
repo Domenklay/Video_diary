@@ -156,6 +156,18 @@ public final class UniverseActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        // Never expose the retained WebView after the app returns from background
+        // with PIN protection. Unlock through the native main screen first.
+        if (getSharedPreferences("diary_pin", MODE_PRIVATE).contains("verifier") &&
+            !DiarySessionGate.isAuthorized()) {
+            Intent unlockIntent = new Intent();
+            unlockIntent.setClassName(this, "com.quietmoments.diary.MainActivity");
+            unlockIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT |
+                Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(unlockIntent);
+            finish();
+            return;
+        }
         switchingToNative = false;
         if (web != null) web.onResume();
         if (pageReady) {
