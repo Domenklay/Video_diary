@@ -143,6 +143,58 @@ input[type="date"]{color-scheme:light}
 @media(prefers-reduced-motion:reduce){
  *,*::before,*::after{animation:none!important;transition:none!important}
 }
+
+/* v1.8.1: strong accessible contrast across the six illustrated themes */
+:root[data-app-theme="moon"]{--muted:#574562;--line:#ab8ab9}
+:root[data-app-theme="rose"]{--muted:#67475b;--line:#c18da3}
+:root[data-app-theme="forest"]{--muted:#496653;--line:#89b29a}
+:root[data-app-theme="sea"]{--muted:#4b6b7b;--line:#85b3c4}
+:root[data-app-theme="dawn"]{--muted:#72513d;--line:#d1a87c}
+:root[data-app-theme="night"]{--muted:#d1e2e9;--line:#698f9c}
+.app::before{opacity:.52}
+:root[data-app-theme="night"] .app::before{opacity:.40}
+.card{
+ background:var(--surface);
+ color:var(--ink);
+ border:1.5px solid var(--line);
+ box-shadow:0 8px 25px #100f1923;
+}
+.card h2,.card h3,.tile .tt{color:var(--ink);font-weight:700}
+.card p,.card .small,.listitem p,.tile .note,.subtitle,.mutednote{
+ color:var(--muted);
+}
+.tile,.listitem,.notice{
+ color:var(--ink);
+ border:1.4px solid var(--line);
+ box-shadow:0 3px 12px #14202a12;
+}
+.tile{background:var(--surface);min-height:119px}
+.nav{border-top:1.5px solid var(--line);background:var(--surface)}
+.navbtn{font-size:11px;font-weight:600;color:var(--muted)}
+.navbtn.active{color:var(--gold);font-weight:800}
+button.primary,.primary{background:var(--gold);color:var(--surface);font-weight:750}
+button.secondary,.secondary{color:var(--ink);background:var(--surface2);border:1.5px solid var(--line)}
+button.pill,.pill{color:var(--ink);background:var(--surface2);border-color:var(--line)}
+button.pill.on,.pill.on{color:var(--surface);background:var(--gold)}
+input,textarea,select{
+ background:var(--surface);
+ color:var(--ink);
+ border:1.5px solid var(--line);
+ font-size:16px;
+}
+input::placeholder,textarea::placeholder{color:var(--muted)}
+input:focus,textarea:focus,select:focus{
+ outline:2px solid var(--gold);
+ outline-offset:1px;
+ border-color:var(--gold);
+}
+:root[data-app-theme="night"] .card,
+:root[data-app-theme="night"] .tile{box-shadow:0 8px 25px #0006}
+:root[data-app-theme="night"] .primary{
+ color:#10212a;
+}
+:root[data-app-theme="night"] .navbtn.active .ni{background:var(--active)}
+@media(max-width:380px){.navbtn{font-size:10.5px}.tile .note{font-size:12px}}
 </style></head><body><div class="app"><header class="top"><div><div class="eyebrow">ТИХИЕ МОМЕНТЫ · МОЯ ВСЕЛЕННАЯ</div><h1 class="h1" id="pageTitle">Моя вселенная</h1><div class="subtitle" id="pageSubtitle">Маленькая магия каждого дня</div></div><div class="brandmoon">☾</div></header><main id="main"></main><nav class="nav" id="nav"></nav></div><script>
 'use strict';
 const K='myuniverse_v1';const SIGN=[['Овен','♈',3,21,4,19],['Телец','♉',4,20,5,20],['Близнецы','♊',5,21,6,20],['Рак','♋',6,21,7,22],['Лев','♌',7,23,8,22],['Дева','♍',8,23,9,22],['Весы','♎',9,23,10,22],['Скорпион','♏',10,23,11,21],['Стрелец','♐',11,22,12,21],['Козерог','♑',12,22,1,19],['Водолей','♒',1,20,2,18],['Рыбы','♓',2,19,3,20]];
