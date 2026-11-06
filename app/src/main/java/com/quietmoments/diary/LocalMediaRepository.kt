@@ -134,7 +134,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                 items.forEach { m ->
                     payload.put(JSONObject().apply {
                         put("id", m.id); put("title", m.title); put("album", m.album)
-                        put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt)
+                        put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt); put("memoryDate", m.memoryDate)
                     })
                     val f = File(media, m.fileName)
                     if (!f.isFile) error("Не найден локальный файл: ${m.title}")
@@ -159,7 +159,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     zip.closeEntry()
                 }
                 zip.putNextEntry(ZipEntry("backup-version.txt"))
-                zip.write("quietmoments-v0.6-local\n".toByteArray(Charsets.UTF_8))
+                zip.write("quietmoments-v1.2-local\n".toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
                 zip.putNextEntry(ZipEntry("moments.json"))
                 zip.write(payload.toString().toByteArray(Charsets.UTF_8))
