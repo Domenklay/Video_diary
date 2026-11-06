@@ -15,7 +15,8 @@ import java.util.zip.ZipOutputStream
 data class BackupSummary(
     val photos: Int, val videos: Int, val diaryDays: Int,
     val capsules: Int, val hasProfile: Boolean, val hasUniverse: Boolean,
-    val hasAlbumCovers: Boolean, val bytes: Long, val verified: Boolean
+    val hasAlbumCovers: Boolean, val bytes: Long, val verified: Boolean,
+    val hasAppearance: Boolean = false
 )
 
 private fun shaHex(bytes: ByteArray) =
@@ -81,6 +82,7 @@ object BackupArchive {
         mediaPath.matches(name) || capsulePath.matches(name) -> MAX_SINGLE_MEDIA
         name == "profile/about_me.json" -> 32_000L
         name == "album_covers.json" -> 100_000L
+        name == "preferences/appearance.json" -> 2_048L
         name == "backup-version.txt" -> 100L
         name == "backup-integrity.json" -> 4_000_000L
         name in setOf("moments.json", "journal/reflections.json",
@@ -169,6 +171,13 @@ object BackupArchive {
         metadata["journal/reflections.json"]?.let { JSONArray(it) }
         metadata["universe/state.json"]?.let { JSONObject(it) }
         metadata["album_covers.json"]?.let { JSONObject(it) }
+        metadata["preferences/appearance.json"]?.let {
+            val appearance = JSONObject(it)
+            require(DiaryThemes.all.any { theme ->
+                theme.id == appearance.optString("theme")
+            }) { "В архиве неизвестная тема" }
+            require(appearance.has("motion")) { "Не указана настройка анимации" }
+        }
         metadata["backup-version.txt"]?.let {
             require(it.startsWith("quietmoments-")) { "Неизвестная версия копии" }
         }
@@ -193,7 +202,8 @@ object BackupArchive {
             capsules.size, metadata.containsKey("profile/about_me.json"),
             metadata.containsKey("universe/state.json"),
             metadata.containsKey("album_covers.json"),
-            total, manifest != null
+            total, manifest != null,
+            metadata.containsKey("preferences/appearance.json")
         )
     }
 }
