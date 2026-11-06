@@ -10,8 +10,8 @@ android {
         applicationId = "com.quietmoments.universeoffline"
         minSdk = 26
         targetSdk = 35
-        versionCode = 240
-        versionName = "2.4.0-safe-migration"
+        versionCode = 250
+        versionName = "2.5.0-universe-fast-navigation"
     }
     val stableSigningPath = System.getenv("QM_KEYSTORE_PATH")
     signingConfigs {
@@ -30,7 +30,7 @@ android {
     buildTypes {
         debug {
             // Install preview beside existing versions; never replace private data without a stable key.
-            applicationIdSuffix = ".preview240"
+            applicationIdSuffix = ".preview250"
             versionNameSuffix = "-preview"
         }
         release {
