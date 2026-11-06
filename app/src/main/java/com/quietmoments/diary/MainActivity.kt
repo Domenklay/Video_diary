@@ -97,6 +97,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     val lock = remember { DiaryPinLock(context) }
     var unlocked by rememberSaveable { mutableStateOf(!lock.isEnabled()) }
     var currentTab by rememberSaveable { mutableStateOf("home") }
+    var profileBackTab by rememberSaveable { mutableStateOf("settings") }
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val tabStateHolder = rememberSaveableStateHolder()
 
@@ -139,10 +140,10 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
             ) {
                 tabs.forEach { tab ->
                     NavigationBarItem(
-                        selected = currentTab == tab.id,
+                        selected = currentTab == tab.id || (currentTab == "profile" && tab.id == "settings"),
                         onClick = { selectTab(tab.id) },
                         icon = { Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(23.dp)) },
-                        label = { Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
+                        label = { Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelMedium) },
                         alwaysShowLabel = true,
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary, selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -179,7 +180,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         onOpenMoods = { currentTab = "moods" }
                     )
                     "capsules" -> TimeCapsuleScreen(onBack = { currentTab = "home" })
-                    "profile" -> AboutMeQuestionnaire(onBack = { currentTab = "settings" })
+                    "profile" -> AboutMeQuestionnaire(onBack = { currentTab = profileBackTab })
                     "moods" -> MoodInsightsScreen(
                         onBack = { currentTab = "home" },
                         onOpenDay = { selected ->
@@ -189,14 +190,14 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                     )
                     "settings" -> DiarySettingsPage(lock,
                         onOpenDiary = { currentTab = "diary" },
-                        onOpenProfile = { currentTab = "profile" },
+                        onOpenProfile = { profileBackTab = "settings"; currentTab = "profile" },
                         themeId = themeId, onSelectTheme = onSelectTheme,
                         motionEnabled = motionEnabled, onMotionChange = onMotionChange)
                     else -> DiaryHomePage(
                         onOpenDiary = { currentTab = "diary" },
                         onOpenUniverse = { openUniverse() },
                         onOpenSettings = { currentTab = "settings" },
-                        onOpenProfile = { currentTab = "profile" },
+                        onOpenProfile = { profileBackTab = "home"; currentTab = "profile" },
                         onOpenCapsules = { currentTab = "capsules" },
                         onOpenMoods = { currentTab = "moods" },
                         onOpenDay = { selected ->
