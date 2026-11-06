@@ -410,7 +410,7 @@ private fun DiaryHomePage(
                 Text("Мой сегодняшний вопрос", style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold)
             }
-            Text(LocalJournal.questionFor(LocalDate.now()),
+            Text(LocalJournal.questionFor(LocalDate.now(), profile.questionTheme),
                 style = MaterialTheme.typography.bodyLarge)
             TextButton(onClick = onOpenDiary) {
                 Text("Ответить в дневнике")
