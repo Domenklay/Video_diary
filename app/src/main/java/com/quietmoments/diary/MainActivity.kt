@@ -121,6 +121,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
         )
     }
     var profileBackTab by rememberSaveable { mutableStateOf("home") }
+    var driveBackTab by rememberSaveable { mutableStateOf("settings") }
 
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val tabStateHolder = rememberSaveableStateHolder()
@@ -212,11 +213,22 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         onOpenTransfer = { currentTab = "transfer" }
                     )
                     "transfer" -> DataTransferScreen(
+                        onOpenGoogleDrive = {
+                            driveBackTab = "transfer"
+                            currentTab = "drive"
+                        },
                         onFinished = {
                             migrationPrefs.edit().putBoolean("transfer_screen_seen", true).apply()
                             currentTab = if (introPrefs.getBoolean("questionnaire_seen", false)) "home"
                                 else "profile"
                         },
+                        onAppearanceRestored = { id, enabled ->
+                            onSelectTheme(id)
+                            onMotionChange(enabled)
+                        }
+                    )
+                    "drive" -> GoogleDriveBackupScreen(
+                        onBack = { currentTab = driveBackTab },
                         onAppearanceRestored = { id, enabled ->
                             onSelectTheme(id)
                             onMotionChange(enabled)
@@ -234,6 +246,10 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                     "settings" -> DiarySettingsPage(lock,
                         onOpenDiary = { currentTab = "diary" },
                         onOpenTransfer = { currentTab = "transfer" },
+                        onOpenGoogleDrive = {
+                            driveBackTab = "settings"
+                            currentTab = "drive"
+                        },
                         onOpenProfile = { profileBackTab = "settings"; currentTab = "profile" },
                         themeId = themeId, onSelectTheme = onSelectTheme,
                         motionEnabled = motionEnabled, onMotionChange = onMotionChange)
@@ -515,7 +531,8 @@ private fun DashboardTile(
 
 @Composable
 private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
-    onOpenTransfer: () -> Unit, onOpenProfile: () -> Unit,
+    onOpenTransfer: () -> Unit, onOpenGoogleDrive: () -> Unit,
+    onOpenProfile: () -> Unit,
     themeId: String, onSelectTheme: (String) -> Unit,
     motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
     val palette = LocalDiaryPalette.current
@@ -570,6 +587,23 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         }
         DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CloudUpload, contentDescription = null, tint = palette.primary)
+                Spacer(Modifier.width(10.dp))
+                Text("Google Диск", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+            }
+            Text("Храни проверенные ZIP-копии в своём Google Диске и восстанавливай их на другом устройстве.",
+                style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = onOpenGoogleDrive,
+                modifier = Modifier.fillMaxWidth()) {
+                Text("Облачное хранилище Google")
+            }
+            Text("Ручное копирование через системный выбор файлов. Автоматической синхронизации пока нет.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        DiarySectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CloudDownload, contentDescription = null, tint = palette.primary)
                 Spacer(Modifier.width(10.dp))
                 Text("Резервные копии", style = MaterialTheme.typography.titleMedium)
@@ -586,7 +620,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v2.0 · перенос данных и проверяемые резервные копии", style = MaterialTheme.typography.bodySmall)
+            Text("v2.1 · Google Диск и проверяемые облачные копии", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
