@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.PhotoLibrary
@@ -68,5 +69,40 @@ fun DiarySectionCard(modifier: Modifier = Modifier, content: @Composable ColumnS
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)) {
         Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+    }
+}
+
+
+/** Decorative, readable headers for the media and calendar sections. */
+@Composable
+fun IllustratedSectionHeader(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
+) {
+    val palette = LocalDiaryPalette.current
+    Box(
+        modifier = modifier.fillMaxWidth().height(if (compact) 100.dp else 162.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(Brush.linearGradient(listOf(palette.heroStart, palette.heroEnd)))
+    ) {
+        IllustratedThemeBackground(palette, Modifier.matchParentSize(), alpha = 0.94f)
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.horizontalGradient(listOf(
+                    Color(0xEE181323), Color(0xA8241A32), Color(0x27181225)))
+            )
+        )
+        Column(
+            modifier = Modifier.align(Alignment.CenterStart).padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Text(title, style = if (compact) MaterialTheme.typography.titleLarge
+                else MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold, color = Color.White)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFF7EADB), maxLines = 2)
+        }
     }
 }
