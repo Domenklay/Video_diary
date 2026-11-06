@@ -36,6 +36,37 @@ jobs:
           gradle-version: '8.9'
       - name: Compile debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Restore optional stable signing key
+        env:
+          QM_KEYSTORE_B64: ${{ secrets.QM_KEYSTORE_B64 }}
+          KEY_ALIAS_SECRET: ${{ secrets.QM_KEY_ALIAS }}
+          STORE_PASSWORD_SECRET: ${{ secrets.QM_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD_SECRET: ${{ secrets.QM_KEY_PASSWORD }}
+        run: |
+          if [ -n "$QM_KEYSTORE_B64" ]; then
+            if [ -z "$KEY_ALIAS_SECRET" ] || [ -z "$STORE_PASSWORD_SECRET" ] || [ -z "$KEY_PASSWORD_SECRET" ]; then
+              echo "::error::Signing secrets incomplete. Configure all four QM_ secrets."
+              exit 1
+            fi
+            printf '%s' "$QM_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/quietmoments-release.jks"
+            chmod 600 "$RUNNER_TEMP/quietmoments-release.jks"
+            echo "QM_KEYSTORE_PATH=$RUNNER_TEMP/quietmoments-release.jks" >> "$GITHUB_ENV"
+          fi
+      - name: Build stable release APK when configured
+        if: env.QM_KEYSTORE_PATH != ''
+        env:
+          QM_KEYSTORE_PASSWORD: ${{ secrets.QM_KEYSTORE_PASSWORD }}
+          QM_KEY_ALIAS: ${{ secrets.QM_KEY_ALIAS }}
+          QM_KEY_PASSWORD: ${{ secrets.QM_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Upload stable release APK
+        if: env.QM_KEYSTORE_PATH != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuietMoments-Universe-stable-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
