@@ -178,12 +178,15 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             var metadata: String? = null
             var universeJson: String? = null
             var journalJson: String? = null
+            val seenZipPaths = mutableSetOf<String>()
+            var totalMediaSize = 0L
             context.contentResolver.openInputStream(uri).use { stream ->
                 requireNotNull(stream)
                 ZipInputStream(stream).use { zip ->
                     while (true) {
                         val entry = zip.nextEntry ?: break
                         if (!entry.isDirectory) {
+                            require(seenZipPaths.add(entry.name)) { "Повторяющийся путь ZIP" }
                             if (entry.name == "journal/reflections.json") {
                                 journalJson = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
                                 val j = JSONArray(journalJson!!)
@@ -196,6 +199,8 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                             } else if (entry.name.matches(Regex("media/[A-Za-z0-9_-]+\\.(mp4|img)"))) {
                                 val target = File(staging, entry.name.substringAfterLast('/'))
                                 target.outputStream().use { output -> zip.copyToLimited(output, 500L * 1024 * 1024) }
+                                totalMediaSize += target.length()
+                                require(totalMediaSize <= 2L * 1024 * 1024 * 1024) { "Слишком большой архив" }
                             }
                         }
                         zip.closeEntry()
@@ -206,6 +211,25 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             require(array.length() <= 50000) { "Слишком много записей" }
             val current = list()
             val existing = current.map { it.id }.toMutableSet()
+            val incomingIds = mutableSetOf<String>()
+            // Validate the entire manifest and all media before changing any existing record.
+            for (i in 0 until array.length()) {
+                val record = array.getJSONObject(i)
+                val id = record.getString("id")
+                require(id.matches(Regex("[A-Za-z0-9_-]{1,64}")) && incomingIds.add(id)) { "Повторяющийся или неверный ID" }
+                val file = record.getString("fileName")
+                require(file.matches(Regex("[A-Za-z0-9_-]+\\.(mp4|img)"))) { "Неверное имя файла" }
+                val kind = record.getString("kind")
+                require((kind == "video" && file.endsWith(".mp4")) || (kind == "photo" && file.endsWith(".img"))) { "Неверный тип файла" }
+                require(File(staging, file).isFile) { "В архиве отсутствует медиафайл" }
+                record.optString("memoryDate", "").takeIf { it.isNotBlank() }?.let { LocalDate.parse(it) }
+            }
+            val journalTarget = File(root, "reflections.json")
+            val oldJournal = if (journalJson != null && journalTarget.exists()) journalTarget.readBytes() else null
+            val universeTarget = File(context.filesDir, "universe_backup/restore.json")
+            val oldUniverse = if (universeJson != null && universeTarget.exists()) universeTarget.readBytes() else null
+            var changedJournal = false
+            var changedUniverse = false
             val accepted = mutableListOf<LocalMoment>()
             val moved = mutableListOf<File>()
             try {
@@ -227,9 +251,12 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     accepted += LocalMoment(id, item.optString("album", "Без альбома").take(120),
                         item.optString("title", "Воспоминание").take(180),
                         item.optString("kind", "photo"), destination.name,
-                        item.optLong("createdAt", System.currentTimeMillis()), item.optLong("deletedAt", 0))
+                        item.optLong("createdAt", System.currentTimeMillis()), item.optLong("deletedAt", 0),
+                        item.optString("memoryDate", "").ifBlank {
+                            Instant.ofEpochMilli(item.optLong("createdAt", System.currentTimeMillis()))
+                                .atZone(ZoneId.systemDefault()).toLocalDate().toString()
+                        })
                 }
-                store(current + accepted)
                 // Journal merge: existing dates win; imported entries fill gaps only.
                 journalJson?.let { json ->
                     val journal = LocalJournal(context, uidKey)
@@ -238,9 +265,9 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     for (i in 0 until imported.length()) {
                         val record = imported.getJSONObject(i)
                         val date = record.getString("date")
-                        if (date !in seen) journal.save(DailyReflection(
+                        if (date !in seen) { changedJournal = true; journal.save(DailyReflection(
                             date, record.optString("question").take(500),
-                            record.optString("answer").take(10000), record.optString("mood").take(50)))
+                            record.optString("answer").take(10000), record.optString("mood").take(50))) }
                     }
                 }
                 // Opt-in import restores Universe data on the next opening of its WebView.
@@ -255,8 +282,18 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                         pending.copyTo(File(universeDir, "restore.json"), overwrite = true)
                         pending.delete()
                     }
+                    changedUniverse = true
                 }
+                // Publish the media catalog only after optional journal and Universe writes succeed.
+                store(current + accepted)
             } catch (t: Throwable) {
+                // Restore old auxiliary files before removing newly copied media.
+                if (changedJournal) {
+                    if (oldJournal == null) journalTarget.delete() else writeAtomic(journalTarget, oldJournal)
+                }
+                if (changedUniverse) {
+                    if (oldUniverse == null) universeTarget.delete() else writeAtomic(universeTarget, oldUniverse)
+                }
                 moved.forEach { it.delete() }
                 throw t
             }
