@@ -46,6 +46,14 @@ jobs:
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
       - name: Compile debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuietMoments-Universe-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
       - name: Restore optional stable signing key
         env:
           QM_KEYSTORE_B64: ${{ secrets.QM_KEYSTORE_B64 }}
@@ -108,13 +116,5 @@ jobs:
         with:
           name: QuietMoments-Universe-stable-release-apk
           path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-          retention-days: 30
-      - name: Upload APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: QuietMoments-Universe-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
