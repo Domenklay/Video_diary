@@ -10,8 +10,8 @@ android {
         applicationId = "com.quietmoments.universeoffline"
         minSdk = 26
         targetSdk = 35
-        versionCode = 200
-        versionName = "2.0.0-migration"
+        versionCode = 201
+        versionName = "2.1.0-google-drive"
     }
     val stableSigningPath = System.getenv("QM_KEYSTORE_PATH")
     signingConfigs {
@@ -30,7 +30,7 @@ android {
     buildTypes {
         debug {
             // Install preview beside existing versions; never replace private data without a stable key.
-            applicationIdSuffix = ".preview200"
+            applicationIdSuffix = ".preview201"
             versionNameSuffix = "-preview"
         }
         release {
