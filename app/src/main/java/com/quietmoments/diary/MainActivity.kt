@@ -111,7 +111,9 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     val palette = LocalDiaryPalette.current
     val context = LocalContext.current
     val lock = remember { DiaryPinLock(context) }
-    var unlocked by rememberSaveable { mutableStateOf(!lock.isEnabled()) }
+    // Unlock is intentionally not Saveable: Android may restore UI state after
+    // process death, but a previous PIN entry must never be restored with it.
+    var unlocked by remember { mutableStateOf(!lock.isEnabled()) }
     val introPrefs = remember(context) { context.getSharedPreferences("diary_onboarding", 0) }
     val migrationPrefs = remember(context) { context.getSharedPreferences("diary_migration", 0) }
     val cloudWelcome = remember(context) { context.getSharedPreferences("qm_cloud_welcome", 0) }
@@ -669,7 +671,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v2.3.1 · Google аккаунт, диагностика и резервные копии", style = MaterialTheme.typography.bodySmall)
+            Text("v2.4 · безопасный перенос и резервные копии", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
