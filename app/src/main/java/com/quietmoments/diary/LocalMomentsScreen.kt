@@ -40,7 +40,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
     var dateDraft by remember { mutableStateOf(day) }
     var answer by remember { mutableStateOf("") }
     var mood by remember { mutableStateOf("Спокойно") }
-    var journalOpen by remember(initialDate) { mutableStateOf(true) }
+    var journalOpen by remember(initialDate) { mutableStateOf(false) }
     var captureFile by remember { mutableStateOf<File?>(null) }
     var captureUri by remember { mutableStateOf<Uri?>(null) }
     val scope = rememberCoroutineScope()
@@ -55,6 +55,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
     var editing by remember { mutableStateOf<LocalMoment?>(null) }
     var editTitle by remember { mutableStateOf("") }
     var editAlbum by remember { mutableStateOf("") }
+    var editDate by remember { mutableStateOf("") }
     var calendarVisible by remember { mutableStateOf(true) }
 
     fun refresh() {
@@ -94,7 +95,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         if (uri != null) {
             val mime = context.contentResolver.getType(uri)
             runTask {
-                repo.add(uri, title, album, mime)
+                repo.add(uri, title, album, mime, day)
                 "Файл сохранён локально"
             }
         }
@@ -104,7 +105,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         val uri = captureUri
         if (saved && file != null && uri != null && file.exists() && file.length() > 0) {
             runTask {
-                try { repo.add(uri, title.ifBlank { "Видео от $day" }, album, "video/mp4"); "Видео сохранено" }
+                try { repo.add(uri, title.ifBlank { "Видео от $day" }, album, "video/mp4", day); "Видео сохранено" }
                 finally { file.delete() }
             }
         } else { file?.delete(); error = "Запись отменена или видео не сохранено" }
@@ -130,12 +131,14 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                     label = { Text("Название") }, singleLine = true)
                 OutlinedTextField(value = editAlbum, onValueChange = { editAlbum = it },
                     label = { Text("Альбом") }, singleLine = true)
+                OutlinedTextField(value = editDate, onValueChange = { editDate = it },
+                    label = { Text("Дата воспоминания ГГГГ-ММ-ДД") }, singleLine = true)
             }
         },
-        confirmButton = { TextButton(enabled = editTitle.isNotBlank() && !busy, onClick = {
+        confirmButton = { TextButton(enabled = editTitle.isNotBlank() && runCatching { LocalDate.parse(editDate) }.isSuccess && !busy, onClick = {
             val id = editing!!.id
             editing = null
-            runTask { repo.updateDetails(id, editTitle, editAlbum); "Изменения сохранены" }
+            runTask { repo.updateDetails(id, editTitle, editAlbum, editDate); "Изменения сохранены" }
         }) { Text("Сохранить") } },
         dismissButton = { TextButton(onClick = { editing = null }) { Text("Отмена") } }
     )
@@ -184,7 +187,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
             val activeDates = remember(entries, moments) {
                 entries.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }.toSet() +
                     moments.filter { it.deletedAt == 0L }.map {
-                        Instant.ofEpochMilli(it.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()
+                        runCatching { LocalDate.parse(it.memoryDate) }.getOrDefault(LocalDate.now())
                     }
             }
             DiaryMonthCalendar(selectedDate, activeDates, onDate = { selectDate(it) })
@@ -203,13 +206,13 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
             entries.groupingBy { it.mood }.eachCount().forEach { (label, count) -> Text("$label — $count") }
         }
         DiarySectionCard {
-            Text("Добавить воспоминание", style = MaterialTheme.typography.titleMedium)
+            Text("Добавить воспоминание · $day", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(title, { title = it }, label = { Text("Название") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(album, { album = it }, label = { Text("Альбом") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = !busy, onClick = { pickMedia.launch(arrayOf("image/*", "video/*")) }) { Text("Добавить") }
             OutlinedButton(enabled = !busy, onClick = { createBackup.launch("QuietMoments_backup.zip") }) { Text("Копия") }
             OutlinedButton(enabled = !busy, onClick = { restoreBackup.launch(arrayOf("application/zip", "application/octet-stream")) }) { Text("Импорт") }
@@ -231,7 +234,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         Text(if (showTrash) "Корзина · ${shown.size}" else "Воспоминания · ${shown.size}",
             style = MaterialTheme.typography.titleMedium)
         Text("Календарь: ${moments.count { it.deletedAt == 0L }} медиафайлов и ${entries.size} записей о настроении", style = MaterialTheme.typography.bodySmall)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(shown, key = { it.id }) { moment ->
                 ElevatedCard(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
@@ -254,7 +257,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                                 Text(moment.title, style = MaterialTheme.typography.titleMedium)
                                 Text("${moment.album} · ${if (moment.kind == "video") "Видео" else "Фото"}",
                                     style = MaterialTheme.typography.bodySmall)
-                                Text(java.text.SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(moment.createdAt)),
+                                Text(java.text.moment.memoryDate,
                                     style = MaterialTheme.typography.labelSmall)
                             }
                         }
@@ -269,6 +272,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                                     editing = moment
                                     editTitle = moment.title
                                     editAlbum = moment.album
+                                    editDate = moment.memoryDate
                                 }) { Text("Изменить") }
                                 TextButton(enabled = !busy, onClick = {
                                     runTask { repo.moveToTrash(moment.id); "Перемещено в корзину" }
