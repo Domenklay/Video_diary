@@ -68,14 +68,14 @@ fun LivingThemeParticles(
             val c = palette.accent.copy(alpha = alpha)
             val r = (2.1f + (i % 4) * 1.4f) * density
             when (palette.id) {
-                "rose" -> {
+                "rose", "sakura", "vintage" -> {
                     drawOval(c, topLeft = Offset(x, y),
                         size = Size(r * 2.7f, r * 1.45f))
                     drawLine(palette.accent.copy(alpha = alpha * .62f),
                         Offset(x + r, y), Offset(x + r * 1.8f, y + r * 1.3f),
                         strokeWidth = .6f * density)
                 }
-                "forest" -> {
+                "forest", "meadow", "art_nouveau" -> {
                     drawOval(c, topLeft = Offset(x, y),
                         size = Size(r * 2.2f, r * 1.2f))
                 }
