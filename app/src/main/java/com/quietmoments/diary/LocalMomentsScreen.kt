@@ -23,6 +23,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -34,24 +37,26 @@ import kotlinx.coroutines.withContext
 @Composable
 fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, initialDate: String = LocalDate.now().toString()) {
     val context = LocalContext.current
+    val palette = LocalDiaryPalette.current
     val repo = remember(uid) { LocalMediaRepository(context, uid) }
     val journal = remember(uid) { LocalJournal(context, uid) }
     var entries by remember(uid) { mutableStateOf(emptyList<DailyReflection>()) }
-    var day by remember(initialDate) { mutableStateOf(initialDate) }
+    var day by rememberSaveable { mutableStateOf(initialDate) }
+    var loadedForDate by rememberSaveable { mutableStateOf("") }
     var choosingDate by remember { mutableStateOf(false) }
-    var answer by remember { mutableStateOf("") }
-    var mood by remember { mutableStateOf("Спокойно") }
-    var journalOpen by remember(initialDate) { mutableStateOf(false) }
+    var answer by rememberSaveable { mutableStateOf("") }
+    var mood by rememberSaveable { mutableStateOf("Спокойно") }
+    var journalOpen by rememberSaveable { mutableStateOf(false) }
     var captureFile by remember { mutableStateOf<File?>(null) }
     var captureUri by remember { mutableStateOf<Uri?>(null) }
     val scope = rememberCoroutineScope()
     var moments by remember(uid) { mutableStateOf(emptyList<LocalMoment>()) }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var album by remember { mutableStateOf("Мои моменты") }
-    var title by remember { mutableStateOf("") }
-    var selectedAlbum by remember { mutableStateOf("Все") }
-    var showTrash by remember { mutableStateOf(false) }
+    var album by rememberSaveable { mutableStateOf("Мои моменты") }
+    var title by rememberSaveable { mutableStateOf("") }
+    var selectedAlbum by rememberSaveable { mutableStateOf("Все") }
+    var showTrash by rememberSaveable { mutableStateOf(false) }
     var deleteId by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<LocalMoment?>(null) }
     var editTitle by remember { mutableStateOf("") }
@@ -69,13 +74,17 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         answer = old?.answer ?: ""
         mood = old?.mood ?: "Спокойно"
     }
-    LaunchedEffect(uid) {
+    LaunchedEffect(uid, initialDate) {
         runCatching {
             withContext(Dispatchers.IO) { repo.list() to journal.all() }
         }.onSuccess { (files, reflections) ->
             moments = files
             entries = reflections
-            selectDate(runCatching { LocalDate.parse(initialDate) }.getOrDefault(LocalDate.now()))
+            // Returning to a tab must not erase an unsaved answer or album draft.
+            if (loadedForDate != initialDate) {
+                selectDate(runCatching { LocalDate.parse(initialDate) }.getOrDefault(LocalDate.now()))
+                loadedForDate = initialDate
+            }
         }.onFailure { error = it.localizedMessage ?: "Не удалось открыть локальный каталог" }
     }
 
@@ -184,11 +193,9 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween) {
-            LocalDiaryHeading("Мой видеодневник", "Фото, видео и дорогие сердцу дни",
-                modifier = Modifier.weight(1f))
-        }
+        IllustratedSectionHeader(
+            "Мой видеодневник", "Фото, видео и дорогие сердцу дни"
+        )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { journalOpen = !journalOpen }, modifier = Modifier.weight(1f)) {
                 Text(if (journalOpen) "Скрыть календарь" else "Календарь")
@@ -204,6 +211,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         Text("Все воспоминания хранятся только на твоём устройстве", style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (journalOpen) {
+            IllustratedSectionHeader("Календарь воспоминаний", "Твои дни, настроение и маленькие истории", compact = true)
             Text("Ежедневный вопрос", style = MaterialTheme.typography.titleMedium)
             OutlinedButton(onClick = { choosingDate = true }, modifier = Modifier.fillMaxWidth()) {
                 Text("Выбрать дату: $day")
@@ -254,8 +262,11 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                     text = { Text(name) })
             }
         }
-        Text(if (showTrash) "Корзина · ${shown.size}" else "Воспоминания · ${shown.size}",
-            style = MaterialTheme.typography.titleMedium)
+        IllustratedSectionHeader(
+            if (showTrash) "Корзина" else "Мои альбомы",
+            if (showTrash) "Удалённые воспоминания: ${shown.size}" else "Фото и видео: ${shown.size}",
+            compact = true
+        )
         Text("Календарь: ${moments.count { it.deletedAt == 0L }} медиафайлов и ${entries.size} записей о настроении", style = MaterialTheme.typography.bodySmall)
 
             }
@@ -276,7 +287,14 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                         context.startActivity(intent)
                     }.onFailure { error = it.localizedMessage ?: "Не удалось открыть файл" }
                 }) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    Box(Modifier.fillMaxWidth()) {
+                        IllustratedThemeBackground(
+                            palette, Modifier.matchParentSize(), preview = true, alpha = .23f
+                        )
+                        Box(Modifier.matchParentSize().background(
+                            palette.surface.copy(alpha = .78f)
+                        ))
+                        Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             MomentThumbnail(repo, moment)
                             Column(Modifier.weight(1f)) {
@@ -304,6 +322,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                                     runTask { repo.moveToTrash(moment.id); "Перемещено в корзину" }
                                 }) { Text("В корзину") }
                             }
+                        }
                         }
                     }
                 }
