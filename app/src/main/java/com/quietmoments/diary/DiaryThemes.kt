@@ -1,6 +1,9 @@
 package com.quietmoments.diary
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -10,8 +13,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -121,6 +129,42 @@ object DiaryThemes {
 }
 
 val LocalDiaryPalette = staticCompositionLocalOf { DiaryThemes.all.first() }
+
+/** Detailed illustration bundled in assets. Decode thumbnails at reduced resolution to save RAM. */
+@Composable
+fun IllustratedThemeBackground(
+    palette: DiaryPalette,
+    modifier: Modifier = Modifier,
+    preview: Boolean = false,
+    alpha: Float = 1f,
+    alignment: Alignment = Alignment.TopCenter
+) {
+    val context = LocalContext.current
+    val illustration: ImageBitmap? = remember(context, palette.id, preview) {
+        runCatching {
+            val options = BitmapFactory.Options().apply {
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+                inSampleSize = if (preview) 4 else 1
+            }
+            context.assets.open("universe/themes/${palette.id}.webp").use { stream ->
+                BitmapFactory.decodeStream(stream, null, options)?.asImageBitmap()
+            }
+        }.getOrNull()
+    }
+    if (illustration != null) {
+        Image(
+            bitmap = illustration,
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = ContentScale.Crop,
+            alignment = alignment,
+            alpha = alpha
+        )
+    } else {
+        ThemeOrnament(palette, modifier)
+    }
+}
+
 
 /** Vector decorations remain sharp on any density and are different for each theme. */
 @Composable
@@ -232,7 +276,10 @@ fun ThemeGallery(selectedId: String, onSelect: (String) -> Unit) {
                             Box(Modifier.fillMaxWidth().height(104.dp)
                                 .clip(RoundedCornerShape(15.dp))
                                 .background(Brush.linearGradient(listOf(option.heroStart,option.heroEnd)))) {
-                                ThemeOrnament(option,Modifier.fillMaxSize())
+                                IllustratedThemeBackground(option, Modifier.fillMaxSize(), preview = true)
+                                Box(Modifier.fillMaxSize().background(
+                                    Brush.verticalGradient(listOf(Color(0x22000000), Color(0x66000000)))
+                                ))
                                 Text(option.symbol, modifier=Modifier.align(Alignment.CenterStart)
                                     .padding(start=16.dp), color=option.accent,
                                     style=MaterialTheme.typography.headlineLarge)
