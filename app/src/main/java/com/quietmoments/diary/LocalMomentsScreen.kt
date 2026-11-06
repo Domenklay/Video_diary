@@ -29,6 +29,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -75,7 +77,8 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     var editTitle by remember { mutableStateOf("") }
     var editAlbum by remember { mutableStateOf("") }
     var editDate by remember { mutableStateOf("") }
-    var calendarVisible by remember { mutableStateOf(true) }
+    var calendarVisible by rememberSaveable { mutableStateOf(false) }
+    var addMomentOpen by rememberSaveable { mutableStateOf(false) }
 
     fun refresh() {
         runCatching { repo.list() }.onSuccess { moments = it }.onFailure { error = it.localizedMessage.orEmpty() }
@@ -103,7 +106,10 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     }
 
     LaunchedEffect(openJournalRequest) {
-        if (openJournalRequest > 0) journalOpen = true
+        if (openJournalRequest > 0) {
+            journalOpen = true
+            calendarVisible = false
+        }
     }
 
     fun runTask(block: suspend () -> String) {
@@ -242,7 +248,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     val albums = listOf("Все") + liveMoments.map { it.album }.distinct().sorted()
     val shown = moments.filter {
         (it.deletedAt != 0L) == showTrash &&
-            (showTrash || selectedAlbum == "Все" || it.album == selectedAlbum) &&
+            (showTrash || searchQuery.isNotBlank() || selectedAlbum == "Все" || it.album == selectedAlbum) &&
             MomentSearch.matches(it.title, it.album, it.note, it.memoryDate, searchQuery)
     }
     LazyColumn(
@@ -254,11 +260,11 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
 
         IllustratedSectionHeader(
-            "Мой видеодневник", "Фото, видео и дорогие сердцу дни"
+            "Мой видеодневник", "Фото, видео и дорогие сердцу дни", compact = true
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { journalOpen = !journalOpen }, modifier = Modifier.weight(1f)) {
-                Text(if (journalOpen) "Скрыть календарь" else "Календарь")
+                Text(if (journalOpen) "Скрыть вопрос" else "Вопрос дня")
             }
             Button(enabled = !busy, modifier = Modifier.weight(1f), onClick = {
                 val file = File(context.filesDir, "captures/${UUID.randomUUID()}.mp4")
@@ -270,53 +276,109 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
         }
         Text("Оригиналы остаются на устройстве; копии можно сохранить в облако", style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (journalOpen) {
-            IllustratedSectionHeader("Календарь воспоминаний", "Твои дни, настроение и маленькие истории", compact = true)
-            Text("Ежедневный вопрос", style = MaterialTheme.typography.titleMedium)
-            OutlinedButton(onClick = { choosingDate = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Выбрать дату: $day")
-            }
+        if (journalOpen && searchQuery.isBlank()) {
             val selectedDate = runCatching { LocalDate.parse(day) }.getOrDefault(LocalDate.now())
-            val activeDates = remember(entries, moments) {
-                entries.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }.toSet() +
-                    moments.filter { it.deletedAt == 0L }.map {
-                        runCatching { LocalDate.parse(it.memoryDate) }.getOrDefault(LocalDate.now())
-                    }
-            }
-            DiaryMonthCalendar(selectedDate, activeDates, onDate = { selectDate(it) })
             val currentQuestion = entries.firstOrNull { it.date == day }?.question
                 ?: LocalJournal.questionFor(selectedDate, profile.questionTheme)
-            Text(currentQuestion)
-            OutlinedTextField(answer, { answer = it }, label = { Text("Ответ") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                DiaryProfile.moods.forEach { item ->
-                    FilterChip(selected = mood == item, onClick = { mood = item }, label = { Text(item) })
+            DiarySectionCard {
+                Text("Ежедневный вопрос", style = MaterialTheme.typography.titleMedium,
+                    color = palette.text)
+                OutlinedButton(onClick = { choosingDate = true },
+                    modifier = Modifier.fillMaxWidth()) {
+                    Text("Дата: $day · изменить")
+                }
+                Text(currentQuestion, style = MaterialTheme.typography.titleMedium,
+                    color = palette.text)
+                OutlinedTextField(
+                    value = answer,
+                    onValueChange = { answer = it },
+                    label = { Text("Мой ответ") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3, maxLines = 8
+                )
+                Text("Как ты себя чувствуешь?", style = MaterialTheme.typography.bodyMedium,
+                    color = palette.text)
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DiaryProfile.moods.forEach { item ->
+                        FilterChip(
+                            selected = mood == item,
+                            onClick = { mood = item },
+                            label = { Text(item) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = palette.surface,
+                                labelColor = palette.text,
+                                selectedContainerColor = palette.soft,
+                                selectedLabelColor = palette.text
+                            )
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = moodReason,
+                    onValueChange = { moodReason = it },
+                    label = { Text("Почему такое настроение?") },
+                    modifier = Modifier.fillMaxWidth(), minLines = 2
+                )
+                Button(enabled = !busy, modifier = Modifier.fillMaxWidth(),
+                    onClick = { runTask {
+                        journal.save(DailyReflection(day, currentQuestion, answer, mood, moodReason))
+                        "Ответ сохранён"
+                    } }) { Text("Сохранить день") }
+                TextButton(onClick = onOpenMoods, modifier = Modifier.fillMaxWidth()) {
+                    Text("Календарь эмоций и статистика")
                 }
             }
-            OutlinedTextField(moodReason, { moodReason = it },
-                label = { Text("Почему такое настроение?") },
-                modifier = Modifier.fillMaxWidth(), minLines = 2)
-            Button(enabled = !busy, onClick = { runTask {
-                journal.save(DailyReflection(day, currentQuestion,
-                    answer, mood, moodReason))
-                "Ответ сохранён"
-            }}) { Text("Сохранить день") }
-            TextButton(onClick = onOpenMoods) { Text("Календарь эмоций и статистика") }
-            Text("Статистика настроения", style = MaterialTheme.typography.titleSmall)
-            entries.groupingBy { it.mood }.eachCount().forEach { (label, count) -> Text("$label — $count") }
+            TextButton(onClick = { calendarVisible = !calendarVisible },
+                modifier = Modifier.fillMaxWidth()) {
+                Text(if (calendarVisible) "Скрыть календарь месяца"
+                     else "Показать календарь месяца")
+            }
+            if (calendarVisible) {
+                val activeDates = remember(entries, moments) {
+                    entries.mapNotNull {
+                        runCatching { LocalDate.parse(it.date) }.getOrNull()
+                    }.toSet() + moments.filter { it.deletedAt == 0L }.mapNotNull {
+                        runCatching { LocalDate.parse(it.memoryDate) }.getOrNull()
+                    }
+                }
+                DiaryMonthCalendar(selectedDate, activeDates, onDate = { selectDate(it) })
+            }
         }
-        DiarySectionCard {
-            Text("Добавить воспоминание · $day", style = MaterialTheme.typography.titleLarge)
-            OutlinedTextField(title, { title = it }, label = { Text("Название") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true)
-            OutlinedTextField(album, { album = it }, label = { Text("Альбом") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true)
-        }
-        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(enabled = !busy, onClick = { pickMedia.launch(arrayOf("image/*", "video/*")) }) { Text("Добавить") }
-            OutlinedButton(enabled = !busy, onClick = { createBackup.launch("QuietMoments_backup.zip") }) { Text("Копия") }
-            OutlinedButton(enabled = !busy, onClick = onOpenTransfer) {
-                Text("Импорт и проверка")
+        if (searchQuery.isBlank()) {
+            OutlinedButton(onClick = { addMomentOpen = !addMomentOpen },
+                modifier = Modifier.fillMaxWidth()) {
+                Text(if (addMomentOpen) "Свернуть добавление воспоминания"
+                     else "Добавить фото или видео")
+            }
+            if (addMomentOpen) {
+                DiarySectionCard {
+                    Text("Новое воспоминание · $day",
+                        style = MaterialTheme.typography.titleMedium, color = palette.text)
+                    OutlinedTextField(
+                        value = title, onValueChange = { title = it },
+                        label = { Text("Название") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    OutlinedTextField(
+                        value = album, onValueChange = { album = it },
+                        label = { Text("Альбом") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    Button(enabled = !busy, modifier = Modifier.fillMaxWidth(),
+                        onClick = { pickMedia.launch(arrayOf("image/*", "video/*")) }) {
+                        Text("Выбрать фото или видео")
+                    }
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = !busy, modifier = Modifier.weight(1f),
+                    onClick = { createBackup.launch("QuietMoments_backup.zip") }) {
+                    Text("ZIP-копия")
+                }
+                OutlinedButton(enabled = !busy, modifier = Modifier.weight(1f),
+                    onClick = onOpenTransfer) {
+                    Text("Импорт ZIP")
+                }
             }
         }
         OutlinedTextField(
@@ -333,7 +395,8 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                 }
             },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                .background(palette.surface)
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !showTrash, onClick = { showTrash = false; selectedAlbum = "Все" }, label = { Text("Альбомы") })
@@ -341,7 +404,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
-        if (!showTrash && albums.size > 1) {
+        if (!showTrash && searchQuery.isBlank() && albums.size > 1) {
             Text("Иллюстрированные обложки", style = MaterialTheme.typography.titleMedium)
             Text("Нажми на альбом, чтобы открыть, или на карандаш, чтобы сменить рисунок.",
                 style = MaterialTheme.typography.labelSmall,
@@ -365,7 +428,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                 }
             }
         }
-        if (!showTrash) {
+        if (!showTrash && searchQuery.isBlank()) {
             ScrollableTabRow(selectedTabIndex = albums.indexOf(selectedAlbum).coerceAtLeast(0)) {
                 albums.forEach { name ->
                     Tab(selected = selectedAlbum == name, onClick = { selectedAlbum = name },
@@ -373,11 +436,16 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                 }
             }
         }
-        IllustratedSectionHeader(
-            if (showTrash) "Корзина" else "Мои альбомы",
-            if (showTrash) "Удалённые воспоминания: ${shown.size}" else "Фото и видео: ${shown.size}",
-            compact = true
-        )
+        if (searchQuery.isBlank()) {
+            IllustratedSectionHeader(
+                if (showTrash) "Корзина" else "Мои альбомы",
+                if (showTrash) "Удалённые воспоминания: ${shown.size}"
+                else "Фото и видео: ${shown.size}", compact = true
+            )
+        } else {
+            Text("Результаты поиска", style = MaterialTheme.typography.titleMedium,
+                color = palette.text)
+        }
         Text(if (searchQuery.isBlank()) "Всего медиафайлов: ${moments.count { it.deletedAt == 0L }} · Записей дня: ${entries.size}"
              else "Найдено: ${shown.size}", style = MaterialTheme.typography.bodySmall)
         if (shown.isEmpty() && searchQuery.isNotBlank()) {
