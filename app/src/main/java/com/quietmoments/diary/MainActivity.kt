@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -59,6 +61,22 @@ private val tabs = listOf(
 )
 
 class MainActivity : ComponentActivity() {
+    /** Keep the Android status bar visible; hide only system navigation buttons. */
+    private fun applySystemNavigation(darkTheme: Boolean) {
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !darkTheme
+            isAppearanceLightNavigationBars = !darkTheme
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.navigationBars())
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Swipe or switching activities can reveal the system navigation bar.
+        if (hasFocus) applySystemNavigation(DiaryThemes.byId(DiaryThemes.load(this)).dark)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -69,10 +87,7 @@ class MainActivity : ComponentActivity() {
             SideEffect {
                 window.statusBarColor = palette.page.toArgb()
                 window.navigationBarColor = palette.surface.toArgb()
-                window.decorView.systemUiVisibility =
-                    if (palette.dark) 0 else
-                        android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
-                        android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                applySystemNavigation(palette.dark)
             }
             CompositionLocalProvider(LocalDiaryPalette provides palette, LocalThemeMotionEnabled provides motionEnabled) {
                 MaterialTheme(colorScheme = palette.scheme()) {
@@ -143,7 +158,9 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
             NavigationBar(
                 containerColor = palette.surface,
                 tonalElevation = 6.dp,
-                modifier = Modifier.height(76.dp)
+                // Never constrain Material3's intrinsic height: it must include
+                // the navigation bar inset so labels are not clipped on 3-button devices.
+                modifier = Modifier.fillMaxWidth()
             ) {
                 tabs.forEach { tab ->
                     NavigationBarItem(
