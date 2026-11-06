@@ -31,7 +31,8 @@ fun CloudHubScreen(
     onGoogle: () -> Unit,
     onYandex: () -> Unit,
     onManual: () -> Unit,
-    onTransfer: () -> Unit
+    onTransfer: () -> Unit,
+    onProtected: () -> Unit
 ) {
     val context = LocalContext.current
     val palette = LocalDiaryPalette.current
@@ -108,13 +109,23 @@ fun CloudHubScreen(
             }
         }
         DiarySectionCard {
+            Text("Защищённый архив .qmb", style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold)
+            Text("Шифрование по отдельному паролю. Можно сохранять в любую папку, " +
+                "включая Google Диск и Яндекс Диск через выбор файлов Android.",
+                style = MaterialTheme.typography.bodySmall)
+            Button(onClick = onProtected, modifier = Modifier.fillMaxWidth()) {
+                Text("Создать защищённую копию")
+            }
+        }
+        DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Security, contentDescription = null, tint = palette.primary)
                 Spacer(Modifier.width(9.dp))
                 Text("О защите данных", style = MaterialTheme.typography.titleMedium)
             }
-            Text("Оригиналы остаются на телефоне. Облачные ZIP-копии " +
-                "ещё не зашифрованы отдельным паролем.",
+            Text("Обычные облачные ZIP-копии не зашифрованы. " +
+                "Для защиты паролем используй отдельный архив .qmb.",
                 style = MaterialTheme.typography.bodySmall)
         }
     }

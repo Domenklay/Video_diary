@@ -266,8 +266,8 @@ fun DataTransferScreen(
             enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text("Продолжить в приложение")
         }
-        Text("PIN закрывает экран, но не шифрует ZIP и фотографии. " +
-            "Парольные копии и биометрия запланированы отдельно.",
+        Text("PIN и биометрия защищают вход, но не шифруют фото на телефоне. " +
+            "Архив с паролем создаётся в разделе «Облако и копии» → «Защищённый архив».",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(18.dp))

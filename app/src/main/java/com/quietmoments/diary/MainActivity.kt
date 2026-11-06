@@ -3,7 +3,8 @@ package com.quietmoments.diary
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
+import com.quietmoments.universe.DiarySessionGate
 import androidx.activity.compose.setContent
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -59,7 +60,12 @@ private val tabs = listOf(
     DiaryTab("settings", "Настройки", Icons.Default.Settings)
 )
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
+    private var foregroundEpoch by mutableIntStateOf(0)
+
+    fun authenticateBiometric(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        BiometricDiaryAuth.show(this, onSuccess, onError)
+    }
     /** Keep the Android status bar visible; hide only system navigation buttons. */
     private fun applySystemNavigation(darkTheme: Boolean) {
         WindowInsetsControllerCompat(window, window.decorView).apply {
@@ -81,6 +87,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        foregroundEpoch++
         UniverseActivity.consumeNavigation()?.let { universeNavigation = it }
     }
 
@@ -106,6 +113,7 @@ class MainActivity : ComponentActivity() {
                 MaterialTheme(colorScheme = palette.scheme()) {
                     QuietMomentsApp(themeId = themeId,
                         universeNavigation = universeNavigation,
+                        foregroundEpoch = foregroundEpoch,
                         onUniverseNavigationConsumed = { universeNavigation = null },
                         onSelectTheme = { newId ->
                         DiaryThemes.save(context, newId)
@@ -123,13 +131,23 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit,
-    universeNavigation: Bundle?, onUniverseNavigationConsumed: () -> Unit) {
+    universeNavigation: Bundle?, foregroundEpoch: Int,
+    onUniverseNavigationConsumed: () -> Unit) {
     val palette = LocalDiaryPalette.current
     val context = LocalContext.current
     val lock = remember { DiaryPinLock(context) }
     // Unlock is intentionally not Saveable: Android may restore UI state after
     // process death, but a previous PIN entry must never be restored with it.
     var unlocked by remember { mutableStateOf(!lock.isEnabled()) }
+    val activity = context as MainActivity
+    LaunchedEffect(foregroundEpoch) {
+        if (lock.isEnabled()) {
+            if (!DiarySessionGate.isAuthorized()) unlocked = false
+        } else {
+            DiarySessionGate.unlock()
+            unlocked = true
+        }
+    }
     val introPrefs = remember(context) { context.getSharedPreferences("diary_onboarding", 0) }
     val migrationPrefs = remember(context) { context.getSharedPreferences("diary_migration", 0) }
     val cloudWelcome = remember(context) { context.getSharedPreferences("qm_cloud_welcome", 0) }
@@ -163,7 +181,14 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     }
 
     if (!unlocked) {
-        DiaryUnlockScreen(lock, onUnlock = { unlocked = true })
+        DiaryUnlockScreen(lock,
+            onUnlock = { DiarySessionGate.unlock(); unlocked = true },
+            onBiometric = { onError ->
+                activity.authenticateBiometric(
+                    onSuccess = { DiarySessionGate.unlock(); unlocked = true },
+                    onError = onError
+                )
+            })
         return
     }
     // Receive navigation after the PIN gate, including after a restored Activity.
@@ -268,6 +293,13 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             onMotionChange(enabled)
                         }
                     )
+                    "protected" -> ProtectedBackupScreen(
+                        onBack = { currentTab = "cloudHub" },
+                        onAppearanceRestored = { id, enabled ->
+                            onSelectTheme(id)
+                            onMotionChange(enabled)
+                        }
+                    )
                     "cloudHub" -> CloudHubScreen(
                         onBack = { currentTab = "settings" },
                         onGoogle = {
@@ -279,7 +311,8 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             driveBackTab = "cloudHub"
                             currentTab = "drive"
                         },
-                        onTransfer = { currentTab = "transfer" }
+                        onTransfer = { currentTab = "transfer" },
+                        onProtected = { currentTab = "protected" }
                     )
                     "cloud" -> GoogleCloudAccountScreen(
                         onBack = {
@@ -689,7 +722,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v2.7.2 · удобный дневник и облако", style = MaterialTheme.typography.bodySmall)
+            Text("v2.8 · защита входа и зашифрованные копии", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
