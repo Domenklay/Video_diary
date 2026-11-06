@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v1.8.3-universe-interpretations]
+    branches: [main, v1.8.4-new-themes]
   workflow_dispatch:
 
 permissions:
@@ -32,6 +32,8 @@ jobs:
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
       - name: Verify Universe descriptions
         run: node --test universe/tests/interpretations.test.cjs
+      - name: Verify all 12 illustrated themes
+        run: python3 universe/tests/theme_assets.py
       - name: Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
