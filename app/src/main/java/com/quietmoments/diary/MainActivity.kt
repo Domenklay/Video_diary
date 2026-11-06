@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -145,6 +146,12 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit) {
         }
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
+            IllustratedThemeBackground(
+                palette = palette,
+                modifier = Modifier.fillMaxSize(),
+                alpha = if (palette.dark) 0.26f else 0.34f,
+                alignment = Alignment.Center
+            )
             when (currentTab) {
                 "diary" -> LocalMomentsScreen(
                     uid = "offline", pinLock = lock, initialDate = chosenDate,
@@ -171,13 +178,6 @@ private fun DiaryHomePage(
 ) {
     val palette = LocalDiaryPalette.current
     val context = LocalContext.current
-    val sky: ImageBitmap? = remember(context) {
-        runCatching {
-            context.assets.open("universe/art/home_sky.webp").use {
-                BitmapFactory.decodeStream(it)?.asImageBitmap()
-            }
-        }.getOrNull()
-    }
     var counts by remember { mutableStateOf(DiaryCounts(0, 0, null)) }
     LaunchedEffect(Unit) {
         counts = withContext(Dispatchers.IO) {
@@ -195,6 +195,12 @@ private fun DiaryHomePage(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Image(
+                painter = painterResource(R.drawable.ic_launcher_art),
+                contentDescription = "Иконка «Тихие моменты»",
+                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(17.dp))
+            )
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text("ТИХИЕ МОМЕНТЫ", color = palette.primary, fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.labelMedium)
@@ -213,7 +219,7 @@ private fun DiaryHomePage(
                 .clip(RoundedCornerShape(28.dp))
                 .background(Brush.linearGradient(listOf(palette.heroStart, palette.heroEnd)))
         ) {
-            ThemeOrnament(palette, modifier = Modifier.fillMaxSize())
+            IllustratedThemeBackground(palette, modifier = Modifier.fillMaxSize(), alpha = 1f)
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.verticalGradient(listOf(Color(0x44221836), Color(0xCC211537)))
@@ -358,7 +364,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit, theme
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v1.4 · локальный видеодневник", style = MaterialTheme.typography.bodySmall)
+            Text("v1.5 · рисованные темы и иконка", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
