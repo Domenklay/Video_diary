@@ -153,8 +153,10 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
         DiaryUnlockScreen(lock, onUnlock = { unlocked = true })
         return
     }
-    LaunchedEffect(Unit) {
-        introPrefs.edit().putBoolean("questionnaire_seen", true).apply()
+    LaunchedEffect(currentTab) {
+        if (currentTab == "profile") {
+            introPrefs.edit().putBoolean("questionnaire_seen", true).apply()
+        }
     }
 
     Scaffold(
@@ -209,11 +211,17 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         onOpenMoods = { currentTab = "moods" },
                         onOpenTransfer = { currentTab = "transfer" }
                     )
-                    "transfer" -> DataTransferScreen(onFinished = {
-                        migrationPrefs.edit().putBoolean("transfer_screen_seen", true).apply()
-                        currentTab = if (introPrefs.getBoolean("questionnaire_seen", false)) "home"
-                            else "profile"
-                    })
+                    "transfer" -> DataTransferScreen(
+                        onFinished = {
+                            migrationPrefs.edit().putBoolean("transfer_screen_seen", true).apply()
+                            currentTab = if (introPrefs.getBoolean("questionnaire_seen", false)) "home"
+                                else "profile"
+                        },
+                        onAppearanceRestored = { id, enabled ->
+                            onSelectTheme(id)
+                            onMotionChange(enabled)
+                        }
+                    )
                     "capsules" -> TimeCapsuleScreen(onBack = { currentTab = "home" })
                     "profile" -> AboutMeQuestionnaire(onBack = { currentTab = profileBackTab })
                     "moods" -> MoodInsightsScreen(
