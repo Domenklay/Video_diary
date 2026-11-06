@@ -15,6 +15,10 @@ import com.quietmoments.universe.DiarySessionGate
 class QuietMomentsApplication : Application(), LifecycleEventObserver {
     override fun onCreate() {
         super.onCreate()
+        // Remove plaintext staging files left by process death or device reboot.
+        java.io.File(cacheDir, "cloud_backups").listFiles()?.filter {
+            it.name.startsWith("qm_secure_staging_")
+        }?.forEach { it.delete() }
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
     }
 
