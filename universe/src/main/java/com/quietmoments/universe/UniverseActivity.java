@@ -61,6 +61,12 @@ public final class UniverseActivity extends Activity {
                 }
                 view.evaluateJavascript(
                     "document.documentElement.setAttribute('data-app-theme','" + theme + "')", null);
+                boolean motion = getIntent().getBooleanExtra("QM_MOTION",
+                    getSharedPreferences("diary_theme", MODE_PRIVATE)
+                        .getBoolean("motion_enabled", true));
+                view.evaluateJavascript(
+                    "document.documentElement.setAttribute('data-motion','" +
+                        (motion ? "on" : "off") + "')", null);
                 boolean dark = "night".equals(theme);
                 getWindow().setStatusBarColor(
                     dark ? Color.rgb(16,29,42) :
