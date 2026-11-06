@@ -190,6 +190,7 @@ fun AboutMeQuestionnaire(onBack: () -> Unit) {
     var signMenu by remember { mutableStateOf(false) }
     var pendingClear by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
+    val skipDisposeDraft = remember { mutableStateOf(false) }
     val palette = LocalDiaryPalette.current
     val current = DiaryProfile(nickname.trim().take(80), about.trim().take(600),
         precious.trim().take(600), memory.trim().take(600),
@@ -200,6 +201,7 @@ fun AboutMeQuestionnaire(onBack: () -> Unit) {
 
     // A separate, atomic draft prevents a half-filled form from replacing saved answers.
     LaunchedEffect(current, committed) {
+        if (current != committed) skipDisposeDraft.value = false
         delay(450)
         runCatching {
             withContext(Dispatchers.IO) {
@@ -211,8 +213,10 @@ fun AboutMeQuestionnaire(onBack: () -> Unit) {
     DisposableEffect(repo) {
         onDispose {
             runCatching {
-                if (latestCurrent == latestCommitted) repo.clearDraft()
-                else repo.saveDraft(latestCurrent)
+                if (!skipDisposeDraft.value) {
+                    if (latestCurrent == latestCommitted) repo.clearDraft()
+                    else repo.saveDraft(latestCurrent)
+                }
             }
         }
     }
@@ -220,6 +224,7 @@ fun AboutMeQuestionnaire(onBack: () -> Unit) {
         runCatching {
             repo.save(current)
             repo.clearDraft()
+            skipDisposeDraft.value = true
             committed = current
         }.onSuccess {
             notice = "Анкета сохранена"
@@ -263,6 +268,7 @@ fun AboutMeQuestionnaire(onBack: () -> Unit) {
                     runCatching {
                         repo.save(DiaryProfile())
                         repo.clearDraft()
+                        skipDisposeDraft.value = true
                     }.onSuccess {
                         nickname = ""; about = ""; precious = ""; memory = ""
                         wish = ""; future = ""; mood = "Спокойно"
