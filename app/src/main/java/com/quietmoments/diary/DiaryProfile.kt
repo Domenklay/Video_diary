@@ -143,52 +143,111 @@ class DiaryProfileRepository(context: Context, uid: String = "offline") {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutMeQuestionnaire(onBack: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val repository = remember { DiaryProfileRepository(context) }
-    var profile by remember { mutableStateOf(runCatching { repository.read() }.getOrDefault(DiaryProfile())) }
-    var nickname by rememberSaveable { mutableStateOf(profile.nickname) }
-    var about by rememberSaveable { mutableStateOf(profile.about) }
-    var precious by rememberSaveable { mutableStateOf(profile.preciousThings) }
-    var memory by rememberSaveable { mutableStateOf(profile.happiestMemory) }
-    var wish by rememberSaveable { mutableStateOf(profile.diaryWish) }
-    var future by rememberSaveable { mutableStateOf(profile.futureSelf) }
-    var mood by rememberSaveable { mutableStateOf(profile.favoriteMood) }
-    var theme by rememberSaveable { mutableStateOf(profile.questionTheme) }
-    var notice by remember { mutableStateOf("") }
-    var pendingClear by remember { mutableStateOf(false) }
-    val colors = LocalDiaryPalette.current
+    val context = LocalContext.current
+    val repo = remember(context) { DiaryProfileRepository(context) }
+    val original = remember(repo) {
+        runCatching { repo.read() }.getOrDefault(DiaryProfile())
+    }
+    val initial = remember(repo) {
+        runCatching { repo.readDraft() ?: original }.getOrDefault(original)
+    }
+    var committed by remember { mutableStateOf(original) }
 
-    fun saveChanges() {
+    var nickname by rememberSaveable { mutableStateOf(initial.nickname) }
+    var about by rememberSaveable { mutableStateOf(initial.about) }
+    var precious by rememberSaveable { mutableStateOf(initial.preciousThings) }
+    var memory by rememberSaveable { mutableStateOf(initial.happiestMemory) }
+    var wish by rememberSaveable { mutableStateOf(initial.diaryWish) }
+    var future by rememberSaveable { mutableStateOf(initial.futureSelf) }
+    var mood by rememberSaveable { mutableStateOf(initial.favoriteMood) }
+    var topic by rememberSaveable { mutableStateOf(initial.questionTheme) }
+    var birth by rememberSaveable { mutableStateOf(initial.birth) }
+    var sign by rememberSaveable { mutableIntStateOf(initial.sign) }
+    var step by rememberSaveable { mutableIntStateOf(0) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var signMenu by remember { mutableStateOf(false) }
+    var pendingClear by remember { mutableStateOf(false) }
+    var notice by remember { mutableStateOf("") }
+    val palette = LocalDiaryPalette.current
+    val current = DiaryProfile(nickname.trim().take(80), about.trim().take(600),
+        precious.trim().take(600), memory.trim().take(600),
+        wish.trim().take(600), future.trim().take(600),
+        mood, topic, birth, sign)
+    val latestCurrent by rememberUpdatedState(current)
+    val latestCommitted by rememberUpdatedState(committed)
+
+    // A separate, atomic draft prevents a half-filled form from replacing saved answers.
+    LaunchedEffect(current, committed) {
+        delay(450)
         runCatching {
-            val updated = DiaryProfile(
-                nickname.trim().take(80), about.trim().take(600),
-                precious.trim().take(600), memory.trim().take(600),
-                wish.trim().take(600), future.trim().take(600),
-                mood, theme
-            )
-            repository.save(updated)
-            profile = updated
-        }.onSuccess { notice = "Анкета сохранена на этом устройстве" }
-            .onFailure { notice = "Ошибка сохранения: " + it.localizedMessage }
+            withContext(Dispatchers.IO) {
+                if (current == committed) repo.clearDraft()
+                else repo.saveDraft(current)
+            }
+        }.onFailure { notice = "Не удалось сохранить черновик: " + it.localizedMessage }
+    }
+    DisposableEffect(repo) {
+        onDispose {
+            runCatching {
+                if (latestCurrent == latestCommitted) repo.clearDraft()
+                else repo.saveDraft(latestCurrent)
+            }
+        }
+    }
+    fun saveAndExit(exit: Boolean) {
+        runCatching {
+            repo.save(current)
+            repo.clearDraft()
+            committed = current
+        }.onSuccess {
+            notice = "Анкета сохранена"
+            if (exit) onBack()
+        }.onFailure { notice = "Ошибка сохранения: " + it.localizedMessage }
+    }
+    fun returnBack() {
+        if (step > 0) step -= 1
+        else onBack()
     }
 
+    if (showDatePicker) {
+        val initialMillis = birth.takeIf { it.isNotBlank() }?.let {
+            runCatching { LocalDate.parse(it).toEpochDay() * 86_400_000L }.getOrNull()
+        }
+        val picker = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    picker.selectedDateMillis?.let {
+                        birth = LocalDate.ofEpochDay(it / 86_400_000L).toString()
+                    }
+                    showDatePicker = false
+                }) { Text("Выбрать") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Отмена") } }
+        ) { DatePicker(state = picker) }
+    }
     if (pendingClear) {
         AlertDialog(
             onDismissRequest = { pendingClear = false },
             title = { Text("Очистить анкету?") },
-            text = { Text("Это удалит только ответы анкеты. Фото, видео и записи дневника останутся.") },
+            text = { Text("Удалятся только ответы анкеты и её черновик. Фото, видео и записи дневника останутся.") },
             confirmButton = {
                 TextButton(onClick = {
                     runCatching {
-                        repository.save(DiaryProfile())
+                        repo.save(DiaryProfile())
+                        repo.clearDraft()
                     }.onSuccess {
-                        profile = DiaryProfile()
                         nickname = ""; about = ""; precious = ""; memory = ""
                         wish = ""; future = ""; mood = "Спокойно"
-                        theme = "Разные темы"; notice = "Анкета очищена"
-                    }.onFailure { notice = it.localizedMessage ?: "Ошибка" }
+                        topic = "Разные темы"; birth = ""; sign = 6
+                        committed = DiaryProfile()
+                        step = 0
+                        notice = "Анкета очищена"
+                    }.onFailure { notice = "Ошибка: " + it.localizedMessage }
                     pendingClear = false
                 }) { Text("Очистить") }
             },
@@ -198,79 +257,195 @@ fun AboutMeQuestionnaire(onBack: () -> Unit) {
         )
     }
 
+    val names = listOf("Знакомство", "То, что дорого", "Мечты", "Мои предпочтения")
+    val descriptions = listOf(
+        "Каждая история начинается со знакомства.",
+        "Люди и мгновения, которые хочется сохранить.",
+        "Воспоминания сегодня — письма себе в будущем.",
+        "Каким будет твоё личное пространство?"
+    )
+
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
-        TextButton(onClick = onBack) {
-            Icon(Icons.Default.ArrowBack, contentDescription = null)
-            Text("Назад")
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = { returnBack() }) {
+                Icon(Icons.Default.ArrowBack, contentDescription = null)
+                Spacer(Modifier.width(5.dp))
+                Text(if (step == 0) "Главная" else "Назад")
+            }
+            Text("Шаг " + (step + 1) + " из 4",
+                style = MaterialTheme.typography.labelLarge, color = palette.text,
+                fontWeight = FontWeight.Bold)
         }
-        IllustratedSectionHeader("Немного обо мне",
-            "Личная анкета — расскажи о себе столько, сколько захочешь")
-        DiarySectionCard {
-            Text("Твоя история", style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold, color = colors.text)
-            Text("Все поля необязательные. Ответы хранятся только на этом устройстве и входят в ZIP-копию.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(nickname, { nickname = it.take(80) },
-                label = { Text("Как к тебе обращаться?") },
-                placeholder = { Text("Имя или псевдоним") },
-                singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(about, { about = it.take(600) },
-                label = { Text("Как бы ты описала себя?") },
-                minLines = 2, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(precious, { precious = it.take(600) },
-                label = { Text("Что для тебя особенно дорого?") },
-                minLines = 2, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(memory, { memory = it.take(600) },
-                label = { Text("Какой момент хотелось бы пережить снова?") },
-                minLines = 2, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(wish, { wish = it.take(600) },
-                label = { Text("Зачем тебе видеодневник?") },
-                minLines = 2, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(future, { future = it.take(600) },
-                label = { Text("Что хочешь сказать себе в будущем?") },
-                minLines = 2, modifier = Modifier.fillMaxWidth())
+        LinearProgressIndicator(
+            progress = { (step + 1) / 4f },
+            modifier = Modifier.fillMaxWidth().height(8.dp)
+                .clip(RoundedCornerShape(6.dp)),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = palette.soft
+        )
+        Box(Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(24.dp))
+            .background(Brush.horizontalGradient(listOf(palette.heroStart, palette.heroEnd)))) {
+            IllustratedThemeBackground(palette, Modifier.matchParentSize(), preview = true,
+                alpha = 1f)
+            Box(Modifier.matchParentSize().background(
+                Brush.horizontalGradient(listOf(Color(0xEB161124), Color(0x88161124)))
+            ))
+            DecorativeFrame(palette, Modifier.matchParentSize())
+            Column(
+                Modifier.align(Alignment.BottomStart).padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Text("МОЙ ЛИЧНЫЙ МИР", color = palette.accent,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold)
+                Text(names[step], color = Color.White,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold)
+                Text(descriptions[step], color = Color(0xFFF5EDF7),
+                    style = MaterialTheme.typography.bodySmall)
+            }
         }
-        DiarySectionCard {
-            Text("Настроение моего дневника", style = MaterialTheme.typography.titleLarge)
-            Text("Что тебе ближе?", style = MaterialTheme.typography.titleSmall)
-            DiaryProfile.moods.chunked(2).forEach { options ->
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    options.forEach { option ->
-                        FilterChip(selected = mood == option,
-                            onClick = { mood = option },
-                            label = { Text(option) })
+        Crossfade(targetState = step,
+            animationSpec = tween(if (LocalThemeMotionEnabled.current) 220 else 0),
+            label = "Личная анкета") { page ->
+            DiarySectionCard {
+                when (page) {
+                    0 -> {
+                        Text("Расскажи о себе", color = palette.text,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold)
+                        Text("Все поля необязательные. Можно использовать псевдоним.",
+                            color = palette.muted,
+                            style = MaterialTheme.typography.bodyMedium)
+                        OutlinedTextField(nickname, { nickname = it.take(80) },
+                            label = { Text("Как к тебе обращаться?") },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        OutlinedTextField(about, { about = it.take(600) },
+                            label = { Text("Как бы ты описала себя?") },
+                            modifier = Modifier.fillMaxWidth(), minLines = 3)
+                    }
+                    1 -> {
+                        Text("Самое важное", color = palette.text,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold)
+                        OutlinedTextField(precious, { precious = it.take(600) },
+                            label = { Text("Что особенно дорого твоему сердцу?") },
+                            modifier = Modifier.fillMaxWidth(), minLines = 3)
+                        OutlinedTextField(memory, { memory = it.take(600) },
+                            label = { Text("Какой момент хочется пережить снова?") },
+                            modifier = Modifier.fillMaxWidth(), minLines = 3)
+                    }
+                    2 -> {
+                        Text("Для будущего", color = palette.text,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold)
+                        OutlinedTextField(wish, { wish = it.take(600) },
+                            label = { Text("Зачем тебе видеодневник?") },
+                            modifier = Modifier.fillMaxWidth(), minLines = 3)
+                        OutlinedTextField(future, { future = it.take(600) },
+                            label = { Text("Что скажешь себе через несколько лет?") },
+                            modifier = Modifier.fillMaxWidth(), minLines = 3)
+                    }
+                    else -> {
+                        Text("Настрой дневник под себя", color = palette.text,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold)
+                        Text("Какое настроение тебе ближе?",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = palette.text)
+                        DiaryProfile.moods.chunked(2).forEach { pair ->
+                            Row(Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                pair.forEach { option ->
+                                    FilterChip(
+                                        selected = mood == option, onClick = { mood = option },
+                                        label = { Text(option, maxLines = 1) },
+                                        modifier = Modifier.weight(1f))
+                                }
+                                if (pair.size == 1) Spacer(Modifier.weight(1f))
+                            }
+                        }
+                        Text("О чём хочется писать чаще?",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = palette.text)
+                        DiaryProfile.themes.forEach { option ->
+                            FilterChip(
+                                selected = topic == option,
+                                onClick = { topic = option },
+                                label = { Text(option) })
+                        }
+                        HorizontalDivider()
+                        Text("Для «Моей вселенной» (необязательно)",
+                            style = MaterialTheme.typography.titleSmall, color = palette.text)
+                        OutlinedButton(onClick = { showDatePicker = true },
+                            modifier = Modifier.fillMaxWidth()) {
+                            Text(if (birth.isBlank()) "Указать дату рождения"
+                                else "Дата рождения: " + birth)
+                        }
+                        if (birth.isNotBlank()) {
+                            TextButton(onClick = { birth = "" }) { Text("Убрать дату") }
+                        }
+                        Box {
+                            OutlinedButton(onClick = { signMenu = true }) {
+                                Text("Знак зодиака: " + DiaryProfile.signs[sign])
+                            }
+                            DropdownMenu(expanded = signMenu,
+                                onDismissRequest = { signMenu = false }) {
+                                DiaryProfile.signs.forEachIndexed { index, name ->
+                                    DropdownMenuItem(text = { Text(name) }, onClick = {
+                                        sign = index; signMenu = false
+                                    })
+                                }
+                            }
+                        }
+                        Text("Имя, дата рождения и знак синхронизируются с «Моей вселенной».",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.muted)
                     }
                 }
             }
-            Text("О чём чаще хочется писать?", style = MaterialTheme.typography.titleSmall)
-            DiaryProfile.themes.forEach { option ->
-                FilterChip(
-                    selected = theme == option,
-                    onClick = { theme = option },
-                    label = { Text(option) }
-                )
-            }
+        }
+        if (current != committed) {
+            Text("Изменения автоматически сохраняются как черновик.",
+                color = palette.muted, style = MaterialTheme.typography.labelMedium)
         }
         if (notice.isNotBlank()) {
-            Card(colors = CardDefaults.cardColors(containerColor = colors.soft)) {
-                Text(notice, Modifier.padding(12.dp), color = colors.text)
+            Surface(shape = RoundedCornerShape(12.dp), color = palette.soft) {
+                Text(notice, Modifier.fillMaxWidth().padding(12.dp),
+                    color = palette.text, style = MaterialTheme.typography.bodySmall)
             }
         }
-        Button(onClick = { saveChanges() }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.AutoAwesome, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Сохранить анкету")
+        Row(Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = { saveAndExit(true) },
+                modifier = Modifier.weight(1f)) {
+                Text("Сохранить")
+            }
+            Button(
+                onClick = {
+                    if (step == 3) saveAndExit(true)
+                    else { step += 1; notice = "" }
+                },
+                modifier = Modifier.weight(1f)) {
+                Text(if (step == 3) "Завершить" else "Далее")
+                Spacer(Modifier.width(4.dp))
+                Icon(if (step == 3) Icons.Default.CheckCircle
+                    else Icons.Default.ChevronRight,
+                    contentDescription = null, modifier = Modifier.size(18.dp))
+            }
         }
-        TextButton(onClick = { pendingClear = true }, modifier = Modifier.fillMaxWidth()) {
+        TextButton(onClick = { pendingClear = true },
+            modifier = Modifier.fillMaxWidth()) {
             Text("Очистить мои ответы")
         }
-        Text("PIN защищает вход, но анкета и обычные ZIP-копии пока не зашифрованы.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Анкета хранится на устройстве. PIN не шифрует данные; ZIP-копии также не зашифрованы.",
+            color = palette.muted, style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(20.dp))
     }
 }
