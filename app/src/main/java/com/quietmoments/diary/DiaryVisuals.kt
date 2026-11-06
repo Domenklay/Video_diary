@@ -30,9 +30,11 @@ fun UniverseBanner(onOpen: () -> Unit, modifier: Modifier = Modifier) {
         colors = CardDefaults.cardColors(containerColor = palette.heroStart)) {
         Box(Modifier.background(Brush.linearGradient(listOf(palette.heroStart, palette.heroEnd))).fillMaxWidth()) {
             IllustratedThemeBackground(palette, modifier = Modifier.matchParentSize(), alpha = 0.85f)
+            LivingThemeParticles(palette, Modifier.matchParentSize(), strength = .82f)
             Box(Modifier.matchParentSize().background(
                 Brush.verticalGradient(listOf(Color(0x66201530), Color(0xDD1B1630)))
             ))
+            DecorativeFrame(palette, Modifier.matchParentSize())
             Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically,
@@ -68,7 +70,11 @@ fun DiarySectionCard(modifier: Modifier = Modifier, content: @Composable ColumnS
     ElevatedCard(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)) {
-        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+        Box {
+            DecorativeFrame(LocalDiaryPalette.current, Modifier.matchParentSize(), subtle = true)
+            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = content)
+        }
     }
 }
 
@@ -88,12 +94,14 @@ fun IllustratedSectionHeader(
             .background(Brush.linearGradient(listOf(palette.heroStart, palette.heroEnd)))
     ) {
         IllustratedThemeBackground(palette, Modifier.matchParentSize(), alpha = 0.94f)
+        LivingThemeParticles(palette, Modifier.matchParentSize(), strength = .6f)
         Box(
             Modifier.matchParentSize().background(
                 Brush.horizontalGradient(listOf(
                     Color(0xEE181323), Color(0xA8241A32), Color(0x27181225)))
             )
         )
+        DecorativeFrame(palette, Modifier.matchParentSize())
         Column(
             modifier = Modifier.align(Alignment.CenterStart).padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)
