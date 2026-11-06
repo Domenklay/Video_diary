@@ -18,6 +18,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,6 +93,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit) {
     var unlocked by rememberSaveable { mutableStateOf(!lock.isEnabled()) }
     var currentTab by rememberSaveable { mutableStateOf("home") }
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    val tabStateHolder = rememberSaveableStateHolder()
 
     val universeLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -146,23 +150,30 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit) {
         }
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
-            IllustratedThemeBackground(
-                palette = palette,
-                modifier = Modifier.fillMaxSize(),
-                alpha = if (palette.dark) 0.26f else 0.34f,
-                alignment = Alignment.Center
-            )
-            when (currentTab) {
-                "diary" -> LocalMomentsScreen(
-                    uid = "offline", pinLock = lock, initialDate = chosenDate,
-                    onClose = { currentTab = "home" }
+            Crossfade(targetState = palette.id, modifier = Modifier.fillMaxSize(),
+                animationSpec = tween(durationMillis = 320), label = "Фон темы") { theme ->
+                val displayed = DiaryThemes.byId(theme)
+                IllustratedThemeBackground(
+                    palette = displayed,
+                    modifier = Modifier.fillMaxSize(),
+                    alpha = if (displayed.dark) .51f else .66f,
+                    alignment = Alignment.TopCenter
                 )
-                "settings" -> DiarySettingsPage(lock, onOpenDiary = { currentTab = "diary" }, themeId = themeId, onSelectTheme = onSelectTheme)
-                else -> DiaryHomePage(
-                    onOpenDiary = { currentTab = "diary" },
-                    onOpenUniverse = { openUniverse() },
-                    onOpenSettings = { currentTab = "settings" }
-                )
+            }
+            tabStateHolder.SaveableStateProvider(currentTab) {
+                when (currentTab) {
+                    "diary" -> LocalMomentsScreen(
+                        uid = "offline", pinLock = lock, initialDate = chosenDate,
+                        onClose = { currentTab = "home" }
+                    )
+                    "settings" -> DiarySettingsPage(lock, onOpenDiary = { currentTab = "diary" },
+                        themeId = themeId, onSelectTheme = onSelectTheme)
+                    else -> DiaryHomePage(
+                        onOpenDiary = { currentTab = "diary" },
+                        onOpenUniverse = { openUniverse() },
+                        onOpenSettings = { currentTab = "settings" }
+                    )
+                }
             }
         }
     }
@@ -222,7 +233,7 @@ private fun DiaryHomePage(
             IllustratedThemeBackground(palette, modifier = Modifier.fillMaxSize(), alpha = 1f)
             Box(
                 Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(Color(0x44221836), Color(0xCC211537)))
+                    Brush.verticalGradient(listOf(Color(0x52221836), Color(0xB6211537)))
                 )
             )
             Column(
