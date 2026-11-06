@@ -19,6 +19,7 @@
 4. Раздел **Clients → Create client → Android**: укажите:
    - Package name: `com.quietmoments.universeoffline`
    - SHA-1: **отпечаток сертификата именно стабильного ключа v2.0/v2.1/v2.2**, а не debug/preview ключа.
+     **SHA-1 стабильного APK: `1D:9C:05:F4:B1:C3:54:A6:B0:A1:1F:94:65:72:43:3F:25:13:35:B9`**.
 5. SHA-1 можно получить из стабильного APK с Android Build Tools:
    ```
    apksigner verify --print-certs QuietMoments_v2.2_Google_Account.apk
