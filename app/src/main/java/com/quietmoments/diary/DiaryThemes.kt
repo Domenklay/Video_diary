@@ -116,6 +116,48 @@ object DiaryThemes {
             Color(0xFFF2F7F9), Color(0xFFB8CDD9), Color(0xFF2A4555),
             Color(0xFF233E50), Color(0xFFB9E6DB),
             Color(0xFF0D223F), Color(0xFF24596A)
+        ),
+        DiaryPalette(
+            "moon_garden", "Лунный сад", "Фэнтези: лилии, звёзды и серебристая луна", "☽", true,
+            Color(0xFFD5B8FA), Color(0xFF111A37), Color(0xFF1B2448),
+            Color(0xFFF9F5FF), Color(0xFFBDC0DA), Color(0xFF2D345D),
+            Color(0xFF303451), Color(0xFFE4C6F7),
+            Color(0xFF18234B), Color(0xFF50458F)
+        ),
+        DiaryPalette(
+            "meadow", "Цветущий луг", "Коттеджкор: ромашки, маки, солнце и бабочки", "✿", false,
+            Color(0xFF365B3B), Color(0xFFFBFFF5), Color(0xFFFFFEF9),
+            Color(0xFF283E2B), Color(0xFF64735D), Color(0xFFE8EED9),
+            Color(0xFFF6E4C8), Color(0xFFCEA04C),
+            Color(0xFF496A44), Color(0xFFB4B86F)
+        ),
+        DiaryPalette(
+            "art_nouveau", "Золотой модерн", "Ар-нуво: павлины, лилии и изумрудное золото", "❦", false,
+            Color(0xFF225D50), Color(0xFFF8F7E9), Color(0xFFFFFCF0),
+            Color(0xFF243E34), Color(0xFF586C56), Color(0xFFE3EED9),
+            Color(0xFFF6E9CB), Color(0xFFCEAA5D),
+            Color(0xFF184C45), Color(0xFF618B69)
+        ),
+        DiaryPalette(
+            "sakura", "Акварельная сакура", "Японская акварель: розовые лепестки и туман", "❀", false,
+            Color(0xFF8A4666), Color(0xFFFFF8FB), Color(0xFFFFFDFF),
+            Color(0xFF4A3349), Color(0xFF79616E), Color(0xFFF8E8F0),
+            Color(0xFFEDE6F8), Color(0xFFE9A4BA),
+            Color(0xFF745477), Color(0xFFC58EA8)
+        ),
+        DiaryPalette(
+            "neon", "Неоновая галактика", "Космический неон: бирюза, фуксия и планеты", "✧", true,
+            Color(0xFF8EDEF3), Color(0xFF161431), Color(0xFF222044),
+            Color(0xFFF3F0FF), Color(0xFFC5C5E9), Color(0xFF35305D),
+            Color(0xFF322852), Color(0xFFB9D9FF),
+            Color(0xFF281C6F), Color(0xFFB044BA)
+        ),
+        DiaryPalette(
+            "vintage", "Винтажная библиотека", "Ретро: кожаные книги, розы и пергамент", "✎", false,
+            Color(0xFF71372F), Color(0xFFFFF8EF), Color(0xFFFFFDF9),
+            Color(0xFF4E2C2B), Color(0xFF76564D), Color(0xFFF2E2D0),
+            Color(0xFFF6DAD3), Color(0xFFDFB36C),
+            Color(0xFF5B302F), Color(0xFF995C4F)
         )
     )
     fun byId(id: String?): DiaryPalette = all.firstOrNull { it.id == id } ?: all.first()
@@ -255,9 +297,9 @@ fun ThemeOrnament(palette: DiaryPalette, modifier: Modifier = Modifier) {
 fun ThemeGallery(selectedId: String, onSelect: (String) -> Unit) {
     val palette = LocalDiaryPalette.current
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("Коллекция тем", style = MaterialTheme.typography.titleLarge,
+        Text("Коллекция тем · 12 оформлений", style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
-        Text("Выбери свою атмосферу. Каждая тема содержит рисунок, цвета и оформление карточек.",
+        Text("Выбери атмосферу: от уютного луга до неоновой галактики. Все 12 оформлений работают без интернета.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         DiaryThemes.all.chunked(2).forEach { pair ->
@@ -299,6 +341,13 @@ fun ThemeGallery(selectedId: String, onSelect: (String) -> Unit) {
                                             tint = Color.White)
                                     }
                                 }
+                            }
+                            if (option.id in setOf(
+                                    "moon_garden", "meadow", "art_nouveau",
+                                    "sakura", "neon", "vintage")) {
+                                Text("НОВАЯ ТЕМА", style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = palette.primary)
                             }
                             Text(option.name,
                                 style = MaterialTheme.typography.labelLarge,
