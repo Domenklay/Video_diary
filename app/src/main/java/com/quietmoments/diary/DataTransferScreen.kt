@@ -26,6 +26,7 @@ fun DataTransferScreen(
     onFinished: () -> Unit,
     onAppearanceRestored: (String, Boolean) -> Unit = { _, _ -> },
     onOpenGoogleDrive: () -> Unit = {},
+    onOpenGoogleAccount: () -> Unit = {},
     uid: String = "offline"
 ) {
     val context = LocalContext.current
@@ -152,6 +153,16 @@ fun DataTransferScreen(
             "Перенос воспоминаний",
             "Безопасный переход со старых версий «Тихих моментов»"
         )
+        DiarySectionCard {
+            Text("Уже сохраняла данные через Google?",
+                style = MaterialTheme.typography.titleMedium)
+            Text("Войди в тот же Google аккаунт, чтобы найти и восстановить " +
+                "свои облачные копии без переноса ZIP вручную.")
+            Button(onClick = onOpenGoogleAccount, enabled = !busy,
+                modifier = Modifier.fillMaxWidth()) {
+                Text("Войти через Google")
+            }
+        }
         DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CloudUpload, contentDescription = null,
