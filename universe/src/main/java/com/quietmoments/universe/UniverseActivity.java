@@ -31,6 +31,35 @@ public final class UniverseActivity extends Activity {
     private static final int EXPORT_JSON = 7011;
     private static final int IMPORT_JSON = 7012;
     private WebView web;
+    private boolean pageReady = false;
+    private boolean switchingToNative = false;
+    private static String queuedNativeAction;
+    private static String queuedNativeDate;
+
+    /** One-shot, process-local navigation handoff; never writes personal data to disk. */
+    public static synchronized Bundle consumeNavigation() {
+        if (queuedNativeAction == null) return null;
+        Bundle result = new Bundle();
+        result.putString(RESULT_ACTION, queuedNativeAction);
+        if (queuedNativeDate != null) result.putString(RESULT_DATE, queuedNativeDate);
+        queuedNativeAction = null;
+        queuedNativeDate = null;
+        return result;
+    }
+    private static synchronized void queueNavigation(String action, String date) {
+        queuedNativeAction = action;
+        queuedNativeDate = date;
+    }
+    /** Retain the loaded WebView under MainActivity to avoid a fresh HTML render. */
+    private void navigateToNative(String action, String date) {
+        if (switchingToNative) return;
+        switchingToNative = true;
+        queueNavigation(action, date);
+        Intent intent = new Intent();
+        intent.setClassName(this, "com.quietmoments.diary.MainActivity");
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+    }
     private ValueCallback<Uri[]> upload;
     private String pendingJson;
     private boolean selectedDarkTheme = true;
@@ -75,32 +104,8 @@ public final class UniverseActivity extends Activity {
             }
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                String theme = getIntent().getStringExtra("QM_THEME");
-                if (theme == null) {
-                    theme = getSharedPreferences("diary_theme", MODE_PRIVATE).getString("chosen", "moon");
-                }
-                if (theme == null || !theme.matches(
-                    "moon|rose|forest|sea|dawn|night|moon_garden|meadow|art_nouveau|sakura|neon|vintage")) {
-                    theme = "moon";
-                }
-                view.evaluateJavascript(
-                    "document.documentElement.setAttribute('data-app-theme','" + theme + "')", null);
-                boolean motion = getIntent().getBooleanExtra("QM_MOTION",
-                    getSharedPreferences("diary_theme", MODE_PRIVATE)
-                        .getBoolean("motion_enabled", true));
-                view.evaluateJavascript(
-                    "document.documentElement.setAttribute('data-motion','" +
-                        (motion ? "on" : "off") + "')", null);
-                boolean dark = "night".equals(theme) || "moon_garden".equals(theme) || "neon".equals(theme);
-                selectedDarkTheme = dark;
-                getWindow().setStatusBarColor(
-                    dark ? Color.rgb(16,29,42) :
-                    ("rose".equals(theme) ? Color.rgb(255,244,246) :
-                     "forest".equals(theme) ? Color.rgb(241,248,242) :
-                     "sea".equals(theme) ? Color.rgb(240,249,252) :
-                     "dawn".equals(theme) ? Color.rgb(255,248,235) : Color.rgb(250,244,252)));
-                getWindow().setNavigationBarColor(dark ? Color.rgb(22,38,51) : Color.rgb(255,251,255));
-                keepSystemNavigationHidden();
+                pageReady = true;
+                applyVisualPreferences();
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
@@ -116,6 +121,62 @@ public final class UniverseActivity extends Activity {
         });
         setContentView(web);
         web.loadUrl("file:///android_asset/universe/index.html");
+    }
+
+    /** Theme changes from native settings are applied to the retained WebView. */
+    private void applyVisualPreferences() {
+        if (web == null || !pageReady) return;
+        String theme = getIntent().getStringExtra("QM_THEME");
+        if (theme == null) {
+            theme = getSharedPreferences("diary_theme", MODE_PRIVATE).getString("chosen", "moon");
+        }
+        if (theme == null || !theme.matches(
+            "moon|rose|forest|sea|dawn|night|moon_garden|meadow|art_nouveau|sakura|neon|vintage")) {
+            theme = "moon";
+        }
+        web.evaluateJavascript(
+            "document.documentElement.setAttribute('data-app-theme','" + theme + "')", null);
+        boolean motion = getIntent().getBooleanExtra("QM_MOTION",
+            getSharedPreferences("diary_theme", MODE_PRIVATE)
+                .getBoolean("motion_enabled", true));
+        web.evaluateJavascript(
+            "document.documentElement.setAttribute('data-motion','" +
+                (motion ? "on" : "off") + "')", null);
+        boolean dark = "night".equals(theme) || "moon_garden".equals(theme) || "neon".equals(theme);
+        selectedDarkTheme = dark;
+        getWindow().setStatusBarColor(
+            dark ? Color.rgb(16,29,42) :
+            ("rose".equals(theme) ? Color.rgb(255,244,246) :
+             "forest".equals(theme) ? Color.rgb(241,248,242) :
+             "sea".equals(theme) ? Color.rgb(240,249,252) :
+             "dawn".equals(theme) ? Color.rgb(255,248,235) : Color.rgb(250,244,252)));
+        getWindow().setNavigationBarColor(dark ? Color.rgb(22,38,51) : Color.rgb(255,251,255));
+        keepSystemNavigationHidden();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        switchingToNative = false;
+        if (web != null) web.onResume();
+        if (pageReady) {
+            applyVisualPreferences();
+            // Native questionnaire can change while this page stays cached.
+            web.evaluateJavascript(
+                "if(typeof syncSharedIdentity==='function'&&typeof state!=='undefined'){" +
+                    "var before=JSON.stringify(state.profile);syncSharedIdentity();" +
+                    "if(before!==JSON.stringify(state.profile)&&typeof render==='function')render();}", null);
+        }
+    }
+
+    @Override protected void onPause() {
+        if (web != null) web.onPause();
+        super.onPause();
+    }
+
+    @Override protected void onNewIntent(Intent nextIntent) {
+        super.onNewIntent(nextIntent);
+        setIntent(nextIntent);
+        if (pageReady) applyVisualPreferences();
     }
 
     /** Shared nickname, optional date of birth and sign, without exposing diary media. */
@@ -206,12 +267,17 @@ public final class UniverseActivity extends Activity {
                 JSONObject state = new JSONObject(json);
                 File root = new File(getFilesDir(), "universe_backup");
                 if (!root.exists() && !root.mkdirs()) return;
+                File dest = new File(root, "snapshot.json");
+                byte[] bytes = state.toString().getBytes(StandardCharsets.UTF_8);
+                // Initialising the WebView used to fsync the same snapshot at
+                // every launch. Keep on-disk data unchanged if content matches.
+                if (dest.isFile() && dest.length() == bytes.length &&
+                    java.util.Arrays.equals(Files.readAllBytes(dest.toPath()), bytes)) return;
                 File temp = new File(root, "snapshot.pending");
                 try (FileOutputStream stream = new FileOutputStream(temp)) {
-                    stream.write(state.toString().getBytes(StandardCharsets.UTF_8));
+                    stream.write(bytes);
                     stream.getFD().sync();
                 }
-                File dest = new File(root, "snapshot.json");
                 if (!temp.renameTo(dest)) {
                     Files.copy(temp.toPath(), dest.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                     temp.delete();
@@ -243,13 +309,8 @@ public final class UniverseActivity extends Activity {
                     case "settings": action = "NAVIGATE_SETTINGS"; break;
                     default: return;
                 }
-                Intent result = new Intent();
-                result.putExtra(RESULT_ACTION, action);
-                if ("diary".equals(tab)) {
-                    result.putExtra(RESULT_DATE, java.time.LocalDate.now().toString());
-                }
-                setResult(RESULT_OK, result);
-                finish();
+                navigateToNative(action,
+                    "diary".equals(tab) ? java.time.LocalDate.now().toString() : null);
             });
         }
     }
@@ -258,11 +319,7 @@ public final class UniverseActivity extends Activity {
         @JavascriptInterface public void openDiary(String date, String section) {
             runOnUiThread(() -> {
                 // Host receives a request, decides how to open diary. No direct DB mutation.
-                Intent response = new Intent();
-                response.putExtra(RESULT_DATE, date);
-                response.putExtra(RESULT_ACTION, "NEW_DIARY_ENTRY");
-                setResult(RESULT_OK, response);
-                finish();
+                navigateToNative("NEW_DIARY_ENTRY", date);
             });
         }
     }
@@ -309,7 +366,7 @@ public final class UniverseActivity extends Activity {
         if (web == null) { super.onBackPressed(); return; }
         web.evaluateJavascript("(typeof route !== 'undefined' && route !== 'home') ? 'subpage' : 'home'", result -> {
             if ("\"subpage\"".equals(result)) web.evaluateJavascript("go('home')", null);
-            else finish();
+            else navigateToNative("NAVIGATE_HOME", null);
         });
     }
     @Override protected void onDestroy() {
