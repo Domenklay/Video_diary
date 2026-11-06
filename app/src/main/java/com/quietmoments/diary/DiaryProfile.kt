@@ -134,12 +134,12 @@ class DiaryProfileRepository(context: Context, uid: String = "offline") {
             throw e
         }
     }
-    fun addToBackup(zip: ZipOutputStream) {
+    fun addToBackup(writer: BackupZipWriter) {
         if (!file.exists() && !File(file.absolutePath + ".bak").exists()) return
-        val content = DiaryProfile.toJson(read()).toByteArray(Charsets.UTF_8)
-        zip.putNextEntry(ZipEntry("profile/about_me.json"))
-        zip.write(content)
-        zip.closeEntry()
+        writer.writeBytes(
+            "profile/about_me.json",
+            DiaryProfile.toJson(read()).toByteArray(Charsets.UTF_8)
+        )
     }
 }
 
