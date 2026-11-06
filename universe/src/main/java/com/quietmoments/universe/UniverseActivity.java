@@ -103,6 +103,18 @@ public final class UniverseActivity extends Activity {
         private final File identityFile = new File(getFilesDir(),
             "local_moments/offline/profile.json");
 
+        private byte[] readLimited(java.io.InputStream input, int max)
+                throws java.io.IOException {
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            byte[] chunk = new byte[4096];
+            int n;
+            while ((n = input.read(chunk)) != -1) {
+                if (buffer.size() + n > max) throw new java.io.IOException("Too large");
+                buffer.write(chunk, 0, n);
+            }
+            return buffer.toByteArray();
+        }
+
         @JavascriptInterface public String readProfile() {
             try {
                 AtomicFile atomic = new AtomicFile(identityFile);
@@ -110,7 +122,7 @@ public final class UniverseActivity extends Activity {
                     !new File(identityFile.getAbsolutePath() + ".bak").exists()) return "";
                 String raw;
                 try (java.io.InputStream in = atomic.openRead()) {
-                    byte[] bytes = in.readAllBytes();
+                    byte[] bytes = readLimited(in, 32_000);
                     if (bytes.length > 32_000) return "";
                     raw = new String(bytes, StandardCharsets.UTF_8);
                 }
@@ -142,7 +154,7 @@ public final class UniverseActivity extends Activity {
                 if (identityFile.exists() ||
                     new File(identityFile.getAbsolutePath() + ".bak").exists()) {
                     try (java.io.InputStream in = atomic.openRead()) {
-                        byte[] bytes = in.readAllBytes();
+                        byte[] bytes = readLimited(in, 32_000);
                         if (bytes.length > 32_000) return false;
                         profile = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
                     }
