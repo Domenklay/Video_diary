@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Large simple diary silhouette remains legible at launcher size. -->
+    <path android:fillColor="#5D2E67"
+        android:strokeColor="#E9C98C" android:strokeWidth="3.2"
+        android:pathData="M31,18 C27,18 24,22 24,26 L24,80 C24,86 28,90 33,90 L76,90 C81,90 84,86 84,81 L84,26 C84,22 81,18 76,18 Z"/>
+    <path android:fillColor="#A95B82" android:fillAlpha="0.50"
+        android:pathData="M30,24 L77,24 L77,84 L30,84 Z"/>
+    <path android:fillColor="#F3D899"
+        android:pathData="M64,30 C52,30 44,40 44,51 C44,64 53,70 65,67 C56,64 51,57 51,48 C51,40 55,34 64,30 Z"/>
+    <path android:fillColor="#FFB6D9"
+        android:pathData="M42,68 C35,59 28,66 35,72 C29,78 36,85 43,78 C50,85 57,77 49,71 C57,65 49,60 42,68 Z"/>
+    <path android:fillColor="#FBE2A5"
+        android:pathData="M42,70 C44,70 46,72 46,74 C46,76 44,78 42,78 C40,78 38,76 38,74 C38,72 40,70 42,70 Z"/>
+    <path android:fillColor="#F6DFAE"
+        android:pathData="M68,46 L70,52 L76,54 L70,56 L68,62 L66,56 L60,54 L66,52 Z"/>
+    <path android:fillColor="#FFDA8C"
+        android:pathData="M35,35 L36,39 L40,40 L36,41 L35,45 L34,41 L30,40 L34,39 Z"/>
+    <path android:fillColor="#F5D797"
+        android:pathData="M33,85 L75,85 L75,87 L33,87 Z"/>
+</vector>
