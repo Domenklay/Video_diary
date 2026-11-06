@@ -30,7 +30,10 @@ private val moodStyles = listOf(
     MoodStyle("Радость", Color(0xFFDBA35A), "✦"),
     MoodStyle("Спокойно", Color(0xFF619E88), "●"),
     MoodStyle("Грусть", Color(0xFF779BD1), "☾"),
-    MoodStyle("Тревога", Color(0xFFB1779E), "◇")
+    MoodStyle("Тревога", Color(0xFFB1779E), "◇"),
+    MoodStyle("Вдохновение", Color(0xFFAE85C9), "✧"),
+    MoodStyle("Нежность", Color(0xFFE197AA), "♡"),
+    MoodStyle("Мечтательно", Color(0xFF739CAC), "☁")
 )
 private fun moodStyle(name: String): MoodStyle =
     moodStyles.firstOrNull { it.name == name } ?: moodStyles[1]
