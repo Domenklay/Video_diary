@@ -17,6 +17,7 @@ android {
     signingConfigs {
         if (!stableSigningPath.isNullOrBlank()) {
             create("stableRelease") {
+                storeType = "PKCS12"
                 storeFile = file(stableSigningPath)
                 storePassword = System.getenv("QM_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("QM_KEY_ALIAS")
