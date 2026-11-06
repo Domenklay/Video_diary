@@ -150,59 +150,61 @@ class LocalMediaRepository(private val context: Context, uid: String) {
         File(media, item.fileName).delete()
     }
 
-    @Synchronized fun exportBackup(uri: Uri) {
+    /**
+     * All media, capsule files and private metadata are written in one ZIP.
+     * No original file is changed. A checksum list detects incomplete transfer.
+     */
+    @Synchronized fun exportBackup(uri: Uri): BackupSummary {
         val items = list()
         context.contentResolver.openOutputStream(uri, "w").use { stream ->
-            requireNotNull(stream) { "Не удалось создать файл резервной копии" }
+            requireNotNull(stream) { "Не удалось создать резервную копию" }
             ZipOutputStream(stream).use { zip ->
+                val writer = BackupZipWriter(zip)
                 val payload = JSONArray()
                 items.forEach { m ->
                     payload.put(JSONObject().apply {
                         put("id", m.id); put("title", m.title); put("album", m.album)
-                        put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt); put("memoryDate", m.memoryDate); put("note", m.note); put("pageStyle", m.pageStyle)
+                        put("kind", m.kind); put("fileName", m.fileName)
+                        put("createdAt", m.createdAt); put("deletedAt", m.deletedAt)
+                        put("memoryDate", m.memoryDate); put("note", m.note)
+                        put("pageStyle", m.pageStyle)
                     })
-                    val f = File(media, m.fileName)
-                    if (!f.isFile) error("Не найден локальный файл: ${m.title}")
-                    zip.putNextEntry(ZipEntry("media/${m.fileName}"))
-                    f.inputStream().use { it.copyTo(zip) }
-                    zip.closeEntry()
+                    val file = File(media, m.fileName)
+                    require(file.isFile && file.canonicalFile.parentFile == media.canonicalFile) {
+                        "Не найден оригинал: " + m.title
+                    }
+                    writer.writeFile("media/" + m.fileName, file, BackupArchive.MAX_SINGLE_MEDIA)
                 }
-                // Date-locked capsules are backed up with their private attachments.
-                TimeCapsuleRepository(context, uidKey).writeBackup(zip)
-                DiaryProfileRepository(context, uidKey).addToBackup(zip)
-                // Local journal: daily questions and moods, stored next to media index.
+                TimeCapsuleRepository(context, uidKey).writeBackup(writer)
+                DiaryProfileRepository(context, uidKey).addToBackup(writer)
                 val reflections = File(root, "reflections.json")
-                if (reflections.exists()) {
-                    JSONArray(reflections.readText(Charsets.UTF_8))
-                    zip.putNextEntry(ZipEntry("journal/reflections.json"))
-                    reflections.inputStream().use { it.copyTo(zip) }
-                    zip.closeEntry()
+                if (reflections.exists() || File(reflections.absolutePath + ".bak").exists()) {
+                    val bytes = AtomicFile(reflections).openRead().use { it.readBytes() }
+                    require(bytes.size <= 2_000_000)
+                    JSONArray(bytes.toString(Charsets.UTF_8))
+                    writer.writeBytes("journal/reflections.json", bytes)
                 }
-                // Mirror of the Universe WebView localStorage (latest persisted state).
                 val universe = File(context.filesDir, "universe_backup/snapshot.json")
-                if (universe.isFile && universe.length() in 1L..2_000_000L) {
-                    JSONObject(universe.readText(Charsets.UTF_8)) // fail closed on invalid state
-                    zip.putNextEntry(ZipEntry("universe/state.json"))
-                    universe.inputStream().use { it.copyTo(zip) }
-                    zip.closeEntry()
+                if (universe.isFile) {
+                    require(universe.length() <= 2_000_000) { "Данные «Моей вселенной» слишком большие" }
+                    val bytes = universe.readBytes()
+                    JSONObject(bytes.toString(Charsets.UTF_8))
+                    writer.writeBytes("universe/state.json", bytes)
                 }
-                // Optional visual personalization; older backups without this entry still work.
                 if (albumCovers.exists() || File(albumCovers.absolutePath + ".bak").exists()) {
                     val bytes = AtomicFile(albumCovers).openRead().use { it.readBytes() }
                     require(bytes.size <= 100_000) { "Слишком много обложек" }
                     JSONObject(bytes.toString(Charsets.UTF_8))
-                    zip.putNextEntry(ZipEntry("album_covers.json"))
-                    zip.write(bytes)
-                    zip.closeEntry()
+                    writer.writeBytes("album_covers.json", bytes)
                 }
-                zip.putNextEntry(ZipEntry("backup-version.txt"))
-                zip.write("quietmoments-v1.8-local\n".toByteArray(Charsets.UTF_8))
-                zip.closeEntry()
-                zip.putNextEntry(ZipEntry("moments.json"))
-                zip.write(payload.toString().toByteArray(Charsets.UTF_8))
-                zip.closeEntry()
+                writer.writeBytes("backup-version.txt",
+                    "quietmoments-v2.0-local\n".toByteArray(Charsets.UTF_8))
+                writer.writeBytes("moments.json", payload.toString().toByteArray(Charsets.UTF_8))
+                writer.finish()
             }
         }
+        // A successful write alone does not prove the destination has valid bytes.
+        return BackupArchive.inspect(context, uri)
     }
 
     /**
@@ -210,6 +212,8 @@ class LocalMediaRepository(private val context: Context, uid: String) {
      * Failed or incomplete imports leave old data unchanged.
      */
     @Synchronized fun importBackup(uri: Uri): Int {
+        // Validate ZIP entry sizes, CRC, file inventory, and SHA256 before touching local data.
+        BackupArchive.inspect(context, uri)
         val staging = File(root, "restore_${UUID.randomUUID()}").apply { mkdirs() }
         try {
             var metadata: String? = null
@@ -227,7 +231,10 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                         val entry = zip.nextEntry ?: break
                         if (!entry.isDirectory) {
                             require(seenZipPaths.add(entry.name)) { "Повторяющийся путь ZIP" }
-                            if (entry.name == "journal/reflections.json") {
+                            if (entry.name == "backup-integrity.json") {
+                                // Integrity has already been checked during the full preflight.
+                                zip.readBytesLimited(4_000_000)
+                            } else if (entry.name == "journal/reflections.json") {
                                 journalJson = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
                                 val j = JSONArray(journalJson!!)
                                 require(j.length() <= 50000)
