@@ -23,24 +23,26 @@ private val Gold = Color(0xFFE4C78F)
 /** Reusable high-contrast illustrated-feel surfaces, without network images. */
 @Composable
 fun UniverseBanner(onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val palette = LocalDiaryPalette.current
     Card(onClick = onOpen, modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Night)) {
-        Box(Modifier.background(Brush.linearGradient(listOf(Night, Violet))).fillMaxWidth()) {
+        colors = CardDefaults.cardColors(containerColor = palette.heroStart)) {
+        Box(Modifier.background(Brush.linearGradient(listOf(palette.heroStart, palette.heroEnd))).fillMaxWidth()) {
+            ThemeOrnament(palette, modifier = Modifier.matchParentSize())
             Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(Icons.Default.AutoAwesome, null, tint = Gold,
+                    Icon(Icons.Default.AutoAwesome, null, tint = palette.accent,
                         modifier = Modifier.size(28.dp))
-                    Text("МОЯ ВСЕЛЕННАЯ", color = Gold,
+                    Text("МОЯ ВСЕЛЕННАЯ", color = palette.accent,
                         style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 }
                 Text("Сохрани магию каждого дня", color = Color.White,
                     style = MaterialTheme.typography.titleLarge)
                 Text("Гороскопы · Луна · Карты · Сны", color = Color(0xFFECE3F4),
                     style = MaterialTheme.typography.bodyMedium)
-                Text("Открыть раздел  ›", color = Gold,
+                Text("Открыть раздел  ›", color = palette.accent,
                     style = MaterialTheme.typography.labelLarge)
             }
         }
