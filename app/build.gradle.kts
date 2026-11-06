@@ -58,4 +58,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.compose.ui:ui-text-google-fonts:1.7.6")
+    testImplementation("junit:junit:4.13.2")
 }
