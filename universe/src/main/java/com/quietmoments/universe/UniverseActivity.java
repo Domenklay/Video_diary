@@ -1,6 +1,8 @@
 package com.quietmoments.universe;
 
 import android.app.Activity;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import android.util.AtomicFile;
 import java.time.LocalDate;
 import android.content.Intent;
@@ -31,11 +33,29 @@ public final class UniverseActivity extends Activity {
     private WebView web;
     private ValueCallback<Uri[]> upload;
     private String pendingJson;
+    private boolean selectedDarkTheme = true;
+
+    /** Hide only the phone's bottom system navigation, not the status bar. */
+    private void keepSystemNavigationHidden() {
+        WindowInsetsControllerCompat controller =
+            new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
+        controller.setAppearanceLightStatusBars(!selectedDarkTheme);
+        controller.setAppearanceLightNavigationBars(!selectedDarkTheme);
+        controller.setSystemBarsBehavior(
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        controller.hide(WindowInsetsCompat.Type.navigationBars());
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) keepSystemNavigationHidden();
+    }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().setStatusBarColor(Color.rgb(21,19,34));
         getWindow().setNavigationBarColor(Color.rgb(21,19,34));
+        keepSystemNavigationHidden();
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(21,19,34));
         WebSettings settings = web.getSettings();
@@ -59,7 +79,8 @@ public final class UniverseActivity extends Activity {
                 if (theme == null) {
                     theme = getSharedPreferences("diary_theme", MODE_PRIVATE).getString("chosen", "moon");
                 }
-                if (theme == null || !theme.matches("moon|rose|forest|sea|dawn|night")) {
+                if (theme == null || !theme.matches(
+                    "moon|rose|forest|sea|dawn|night|moon_garden|meadow|art_nouveau|sakura|neon|vintage")) {
                     theme = "moon";
                 }
                 view.evaluateJavascript(
@@ -70,7 +91,8 @@ public final class UniverseActivity extends Activity {
                 view.evaluateJavascript(
                     "document.documentElement.setAttribute('data-motion','" +
                         (motion ? "on" : "off") + "')", null);
-                boolean dark = "night".equals(theme);
+                boolean dark = "night".equals(theme) || "moon_garden".equals(theme) || "neon".equals(theme);
+                selectedDarkTheme = dark;
                 getWindow().setStatusBarColor(
                     dark ? Color.rgb(16,29,42) :
                     ("rose".equals(theme) ? Color.rgb(255,244,246) :
@@ -78,9 +100,7 @@ public final class UniverseActivity extends Activity {
                      "sea".equals(theme) ? Color.rgb(240,249,252) :
                      "dawn".equals(theme) ? Color.rgb(255,248,235) : Color.rgb(250,244,252)));
                 getWindow().setNavigationBarColor(dark ? Color.rgb(22,38,51) : Color.rgb(255,251,255));
-                getWindow().getDecorView().setSystemUiVisibility(dark ? 0 :
-                    android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR |
-                    android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                keepSystemNavigationHidden();
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
