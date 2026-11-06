@@ -8,7 +8,7 @@ import java.io.File
 import java.time.LocalDate
 
 /** Optional local answers and moods; independent from Firebase. */
-data class DailyReflection(val date: String, val question: String, val answer: String, val mood: String)
+data class DailyReflection(val date: String, val question: String, val answer: String, val mood: String, val reason: String = "")
 class LocalJournal(context: Context, uid: String) {
     private val root = File(context.filesDir, "local_moments/${uid.replace(Regex("[^A-Za-z0-9_-]"), "_")}").apply { mkdirs() }
     private val target = File(root, "reflections.json")
@@ -18,15 +18,15 @@ class LocalJournal(context: Context, uid: String) {
         val a = JSONArray(text)
         return (0 until a.length()).map { i ->
             val x = a.getJSONObject(i)
-            DailyReflection(x.getString("date"), x.getString("question"), x.optString("answer"), x.optString("mood"))
+            DailyReflection(x.getString("date"), x.getString("question"), x.optString("answer"), x.optString("mood"), x.optString("reason", ""))
         }
     }
     @Synchronized fun save(value: DailyReflection) {
-        require(Regex("\\d{4}-\\d{2}-\\d{2}").matches(value.date))
-        val updated = all().filterNot { it.date == value.date } + value.copy(answer=value.answer.take(10000))
+        LocalDate.parse(value.date)
+        val updated = all().filterNot { it.date == value.date } + value.copy(answer=value.answer.take(10000), reason=value.reason.take(2000))
         val a = JSONArray()
         updated.sortedBy { it.date }.forEach { d -> a.put(JSONObject().apply {
-            put("date", d.date); put("question", d.question); put("answer", d.answer); put("mood", d.mood)
+            put("date", d.date); put("question", d.question); put("answer", d.answer); put("mood", d.mood); put("reason", d.reason)
         }) }
         val atomic = AtomicFile(target)
         val stream = atomic.startWrite()
