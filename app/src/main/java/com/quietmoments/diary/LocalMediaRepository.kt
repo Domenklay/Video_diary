@@ -69,7 +69,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
         val array = JSONArray()
         items.forEach { m -> array.put(JSONObject().apply {
             put("id", m.id); put("album", m.album); put("title", m.title)
-            put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt); put("memoryDate", m.memoryDate); put("note", m.note); put("pageStyle", m.pageStyle); put("note", m.note); put("pageStyle", m.pageStyle)
+            put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt); put("memoryDate", m.memoryDate); put("note", m.note); put("pageStyle", m.pageStyle)
         }) }
         writeAtomic(index, array.toString().toByteArray(Charsets.UTF_8))
     }
@@ -159,7 +159,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                 items.forEach { m ->
                     payload.put(JSONObject().apply {
                         put("id", m.id); put("title", m.title); put("album", m.album)
-                        put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt); put("memoryDate", m.memoryDate)
+                        put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt); put("memoryDate", m.memoryDate); put("note", m.note); put("pageStyle", m.pageStyle)
                     })
                     val f = File(media, m.fileName)
                     if (!f.isFile) error("Не найден локальный файл: ${m.title}")
