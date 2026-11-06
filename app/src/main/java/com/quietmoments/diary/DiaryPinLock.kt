@@ -28,8 +28,18 @@ class DiaryPinLock(context: Context) {
         check(prefs.edit().putString("salt", Base64.encodeToString(salt, Base64.NO_WRAP))
             .putString("verifier", Base64.encodeToString(hash, Base64.NO_WRAP)).commit())
     }
+    /** Biometrics can be opted in only by someone who already knows the PIN. */
+    fun isBiometricEnabled(): Boolean =
+        isEnabled() && prefs.getBoolean("biometric_login", false)
+
+    fun setBiometricEnabled(enabled: Boolean, currentPin: String): Boolean {
+        if (!verify(currentPin)) return false
+        return prefs.edit().putBoolean("biometric_login", enabled).commit()
+    }
+
     fun disable(pin: String): Boolean {
         if (!verify(pin)) return false
-        return prefs.edit().remove("salt").remove("verifier").commit()
+        return prefs.edit().remove("salt").remove("verifier")
+            .remove("biometric_login").commit()
     }
 }
