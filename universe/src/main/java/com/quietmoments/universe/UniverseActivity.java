@@ -1,6 +1,8 @@
 package com.quietmoments.universe;
 
 import android.app.Activity;
+import android.util.AtomicFile;
+import java.time.LocalDate;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
@@ -46,6 +48,7 @@ public final class UniverseActivity extends Activity {
         web.addJavascriptInterface(new UniverseBackupBridge(), "UniverseBackup");
         web.addJavascriptInterface(new DiaryBridge(), "DiaryHost");
         web.addJavascriptInterface(new AppNavigationBridge(), "AppNav");
+        web.addJavascriptInterface(new SharedIdentityBridge(), "SharedIdentity");
         web.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return true; // no external navigation from offline content
@@ -93,6 +96,74 @@ public final class UniverseActivity extends Activity {
         });
         setContentView(web);
         web.loadUrl("file:///android_asset/universe/index.html");
+    }
+
+    /** Shared nickname, optional date of birth and sign, without exposing diary media. */
+    private final class SharedIdentityBridge {
+        private final File identityFile = new File(getFilesDir(),
+            "local_moments/offline/profile.json");
+
+        @JavascriptInterface public String readProfile() {
+            try {
+                AtomicFile atomic = new AtomicFile(identityFile);
+                if (!identityFile.exists() &&
+                    !new File(identityFile.getAbsolutePath() + ".bak").exists()) return "";
+                String raw;
+                try (java.io.InputStream in = atomic.openRead()) {
+                    byte[] bytes = in.readAllBytes();
+                    if (bytes.length > 32_000) return "";
+                    raw = new String(bytes, StandardCharsets.UTF_8);
+                }
+                JSONObject saved = new JSONObject(raw);
+                JSONObject data = new JSONObject();
+                if (saved.has("nickname")) data.put("name", saved.optString("nickname", ""));
+                if (saved.has("birth")) data.put("birth", saved.optString("birth", ""));
+                if (saved.has("sign")) data.put("sign", saved.optInt("sign", 6));
+                return data.toString();
+            } catch (Exception ignored) { return ""; }
+        }
+
+        @JavascriptInterface public synchronized boolean writeProfile(String raw) {
+            if (raw == null || raw.length() > 5_000) return false;
+            try {
+                JSONObject incoming = new JSONObject(raw);
+                String name = incoming.optString("name", "").trim();
+                String birth = incoming.optString("birth", "");
+                int sign = incoming.optInt("sign", 6);
+                if (name.length() > 80 || sign < 0 || sign > 11) return false;
+                if (!birth.isEmpty()) {
+                    if (birth.length() != 10) return false;
+                    LocalDate.parse(birth);
+                }
+                File directory = identityFile.getParentFile();
+                if (!directory.isDirectory() && !directory.mkdirs()) return false;
+                AtomicFile atomic = new AtomicFile(identityFile);
+                JSONObject profile;
+                if (identityFile.exists() ||
+                    new File(identityFile.getAbsolutePath() + ".bak").exists()) {
+                    try (java.io.InputStream in = atomic.openRead()) {
+                        byte[] bytes = in.readAllBytes();
+                        if (bytes.length > 32_000) return false;
+                        profile = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+                    }
+                } else profile = new JSONObject();
+                // Preserve all narrative fields written in the native questionnaire.
+                profile.put("nickname", name);
+                profile.put("birth", birth);
+                profile.put("sign", sign);
+                byte[] bytes = profile.toString().getBytes(StandardCharsets.UTF_8);
+                if (bytes.length > 32_000) return false;
+                java.io.FileOutputStream out = atomic.startWrite();
+                try {
+                    out.write(bytes);
+                    atomic.finishWrite(out);
+                } catch (Exception e) {
+                    atomic.failWrite(out);
+                    throw e;
+                }
+                return true;
+            } catch (Exception ignored) { return false; }
+        }
     }
 
     /** Mirror of the local WebView state, included in local album ZIP exports. */
