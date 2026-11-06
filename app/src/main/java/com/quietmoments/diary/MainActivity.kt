@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -56,27 +57,33 @@ private val tabs = listOf(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = android.graphics.Color.rgb(250, 245, 252)
-        window.navigationBarColor = android.graphics.Color.rgb(255, 249, 251)
-        window.decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
-            android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         setContent {
-            MaterialTheme(colorScheme = lightColorScheme(
-                primary = Plum, onPrimary = Color.White,
-                primaryContainer = Lavender, onPrimaryContainer = Ink,
-                background = Page, surface = Cream,
-                secondaryContainer = Color(0xFFF0E3F2), onSurface = Ink,
-                onBackground = Ink, onSurfaceVariant = Color(0xFF665A70),
-                outline = Color(0xFFAD9FB4), surfaceVariant = Color(0xFFEFE7F1)
-            )) {
-                QuietMomentsApp()
+            val context = LocalContext.current
+            var themeId by rememberSaveable { mutableStateOf(DiaryThemes.load(context)) }
+            val palette = DiaryThemes.byId(themeId)
+            SideEffect {
+                window.statusBarColor = palette.page.toArgb()
+                window.navigationBarColor = palette.surface.toArgb()
+                window.decorView.systemUiVisibility =
+                    if (palette.dark) 0 else
+                        android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
+                        android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+            }
+            CompositionLocalProvider(LocalDiaryPalette provides palette) {
+                MaterialTheme(colorScheme = palette.scheme()) {
+                    QuietMomentsApp(themeId = themeId, onSelectTheme = { newId ->
+                        DiaryThemes.save(context, newId)
+                        themeId = newId
+                    })
+                }
             }
         }
     }
 }
 
 @Composable
-private fun QuietMomentsApp() {
+private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit) {
+    val palette = LocalDiaryPalette.current
     val context = LocalContext.current
     val lock = remember { DiaryPinLock(context) }
     var unlocked by rememberSaveable { mutableStateOf(!lock.isEnabled()) }
@@ -99,7 +106,7 @@ private fun QuietMomentsApp() {
         }
     }
     fun openUniverse() {
-        universeLauncher.launch(Intent(context, UniverseActivity::class.java))
+        universeLauncher.launch(Intent(context, UniverseActivity::class.java).putExtra("QM_THEME", themeId))
     }
     fun selectTab(tab: String) {
         if (tab == "universe") openUniverse()
@@ -112,10 +119,10 @@ private fun QuietMomentsApp() {
     }
 
     Scaffold(
-        containerColor = Page,
+        containerColor = palette.page,
         bottomBar = {
             NavigationBar(
-                containerColor = Color(0xFFFFFAFE),
+                containerColor = palette.surface,
                 tonalElevation = 6.dp,
                 modifier = Modifier.height(76.dp)
             ) {
@@ -127,10 +134,10 @@ private fun QuietMomentsApp() {
                         label = { Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
                         alwaysShowLabel = true,
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Plum, selectedTextColor = Plum,
-                            indicatorColor = Lavender,
-                            unselectedIconColor = Color(0xFF897A93),
-                            unselectedTextColor = Color(0xFF897A93)
+                            selectedIconColor = MaterialTheme.colorScheme.primary, selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = palette.soft,
+                            unselectedIconColor = palette.muted,
+                            unselectedTextColor = palette.muted
                         )
                     )
                 }
@@ -143,7 +150,7 @@ private fun QuietMomentsApp() {
                     uid = "offline", pinLock = lock, initialDate = chosenDate,
                     onClose = { currentTab = "home" }
                 )
-                "settings" -> DiarySettingsPage(lock, onOpenDiary = { currentTab = "diary" })
+                "settings" -> DiarySettingsPage(lock, onOpenDiary = { currentTab = "diary" }, themeId = themeId, onSelectTheme = onSelectTheme)
                 else -> DiaryHomePage(
                     onOpenDiary = { currentTab = "diary" },
                     onOpenUniverse = { openUniverse() },
@@ -162,6 +169,7 @@ private fun DiaryHomePage(
     onOpenUniverse: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
+    val palette = LocalDiaryPalette.current
     val context = LocalContext.current
     val sky: ImageBitmap? = remember(context) {
         runCatching {
@@ -188,12 +196,12 @@ private fun DiaryHomePage(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f)) {
-                Text("ТИХИЕ МОМЕНТЫ", color = Plum, fontWeight = FontWeight.Bold,
+                Text("ТИХИЕ МОМЕНТЫ", color = palette.primary, fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.labelMedium)
                 Text("Моё пространство", style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.SemiBold, color = Ink)
+                    fontWeight = FontWeight.SemiBold, color = palette.text)
                 Text(LocalDate.now().format(DateTimeFormatter.ofPattern("d MMMM, EEEE", Locale("ru"))),
-                    color = Color(0xFF82758A), style = MaterialTheme.typography.bodySmall)
+                    color = palette.muted, style = MaterialTheme.typography.bodySmall)
             }
             FilledTonalIconButton(onClick = onOpenSettings) {
                 Icon(Icons.Default.Settings, contentDescription = "Настройки")
@@ -203,28 +211,25 @@ private fun DiaryHomePage(
         Box(
             Modifier.fillMaxWidth().height(236.dp)
                 .clip(RoundedCornerShape(28.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFF3A285A), Color(0xFF79517D))))
+                .background(Brush.linearGradient(listOf(palette.heroStart, palette.heroEnd)))
         ) {
-            if (sky != null) {
-                Image(sky, contentDescription = null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize())
-            }
+            ThemeOrnament(palette, modifier = Modifier.fillMaxSize())
             Box(
                 Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(Color(0x99221836), Color(0xD8211537)))
+                    Brush.verticalGradient(listOf(Color(0x44221836), Color(0xCC211537)))
                 )
             )
             Column(
                 Modifier.align(Alignment.BottomStart).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("✦  ТВОЯ ИСТОРИЯ", color = Gold,
+                Text("✦  ТВОЯ ИСТОРИЯ", color = palette.accent,
                     style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 Text("Сохрани красоту\nкаждого дня", color = Color.White,
                     style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Button(
                     onClick = onOpenDiary,
-                    colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink),
+                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent, contentColor = Color(0xFF241D2A)),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(19.dp))
@@ -240,21 +245,21 @@ private fun DiaryHomePage(
         }
 
         Text("Мои разделы", style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold, color = Ink)
+            fontWeight = FontWeight.Bold, color = palette.text)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             DashboardTile(
                 "Мой дневник", "Альбомы, видео и календарь", Icons.Default.AutoStories,
-                Color(0xFFFFE9EF), Color(0xFF9A5479), onOpenDiary, Modifier.weight(1f)
+                palette.secondarySoft, palette.primary, onOpenDiary, Modifier.weight(1f)
             )
             DashboardTile(
                 "Моя вселенная", "Гороскопы, Луна и карты", Icons.Default.NightsStay,
-                Color(0xFFECE3FA), Plum, onOpenUniverse, Modifier.weight(1f)
+                palette.soft, palette.primary, onOpenUniverse, Modifier.weight(1f)
             )
         }
         UniverseBanner(onOpen = onOpenUniverse)
         DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.FavoriteBorder, contentDescription = null, tint = Color(0xFFB97B8F))
+                Icon(Icons.Default.FavoriteBorder, contentDescription = null, tint = palette.primary)
                 Spacer(Modifier.width(9.dp))
                 Text("Мой сегодняшний вопрос", style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold)
@@ -279,18 +284,19 @@ private fun DiaryHomePage(
 
 @Composable
 private fun DashboardNumber(title: String, number: String, icon: ImageVector, modifier: Modifier = Modifier) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White),
+    val palette = LocalDiaryPalette.current
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = palette.surface),
         shape = RoundedCornerShape(21.dp)) {
         Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Lavender),
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(palette.soft),
                 contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = Plum)
+                Icon(icon, contentDescription = null, tint = palette.primary)
             }
             Spacer(Modifier.width(10.dp))
             Column {
-                Text(number, style = MaterialTheme.typography.titleLarge, color = Ink,
+                Text(number, style = MaterialTheme.typography.titleLarge, color = palette.text,
                     fontWeight = FontWeight.Bold)
-                Text(title, style = MaterialTheme.typography.labelSmall, color = Color(0xFF7C7084))
+                Text(title, style = MaterialTheme.typography.labelSmall, color = palette.muted)
             }
         }
     }
@@ -302,6 +308,7 @@ private fun DashboardTile(
     backgroundColor: Color, accent: Color,
     onOpen: () -> Unit, modifier: Modifier = Modifier
 ) {
+    val palette = LocalDiaryPalette.current
     Card(onClick = onOpen, modifier = modifier.height(162.dp),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = backgroundColor)) {
@@ -309,23 +316,25 @@ private fun DashboardTile(
             verticalArrangement = Arrangement.SpaceBetween) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(30.dp), tint = accent)
             Text(title, style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold, color = Ink)
+                fontWeight = FontWeight.Bold, color = palette.text)
             Text(subtitle, style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF665A70), maxLines = 2)
+                color = palette.muted, maxLines = 2)
         }
     }
 }
 
 @Composable
-private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit) {
+private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit, themeId: String, onSelectTheme: (String) -> Unit) {
+    val palette = LocalDiaryPalette.current
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         LocalDiaryHeading("Настройки", "Персонализация и защита твоих воспоминаний")
+        ThemeGallery(selectedId = themeId, onSelect = onSelectTheme)
         DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Lock, contentDescription = null, tint = Plum)
+                Icon(Icons.Default.Lock, contentDescription = null, tint = palette.primary)
                 Spacer(Modifier.width(10.dp))
                 Text("Защита PIN-кодом", style = MaterialTheme.typography.titleMedium)
             }
@@ -336,7 +345,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit) {
         }
         DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CloudDownload, contentDescription = null, tint = Plum)
+                Icon(Icons.Default.CloudDownload, contentDescription = null, tint = palette.primary)
                 Spacer(Modifier.width(10.dp))
                 Text("Резервные копии", style = MaterialTheme.typography.titleMedium)
             }
@@ -349,7 +358,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit) {
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v1.3 · локальный видеодневник", style = MaterialTheme.typography.bodySmall)
+            Text("v1.4 · локальный видеодневник", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
