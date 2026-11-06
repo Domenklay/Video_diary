@@ -293,6 +293,13 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             onMotionChange(enabled)
                         }
                     )
+                    "protected" -> ProtectedBackupScreen(
+                        onBack = { currentTab = "cloudHub" },
+                        onAppearanceRestored = { id, enabled ->
+                            onSelectTheme(id)
+                            onMotionChange(enabled)
+                        }
+                    )
                     "cloudHub" -> CloudHubScreen(
                         onBack = { currentTab = "settings" },
                         onGoogle = {
@@ -304,7 +311,8 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             driveBackTab = "cloudHub"
                             currentTab = "drive"
                         },
-                        onTransfer = { currentTab = "transfer" }
+                        onTransfer = { currentTab = "transfer" },
+                        onProtected = { currentTab = "protected" }
                     )
                     "cloud" -> GoogleCloudAccountScreen(
                         onBack = {
