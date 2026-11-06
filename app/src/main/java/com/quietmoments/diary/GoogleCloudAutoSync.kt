@@ -47,7 +47,7 @@ object GoogleCloudAutoSync {
                 val afterExport = GoogleCloudFiles.fingerprint(context)
                 val backup = cloud.upload(temp)
                 val afterUpload = GoogleCloudFiles.fingerprint(context)
-                val unchanged = before == afterExport && before == afterUpload
+                val unchanged = CloudSnapshotFingerprint.unchangedDuringUpload(before, afterExport, afterUpload)
                 prefs.edit().putString("fingerprint", if (unchanged) before else "")
                     .putLong("last_success", System.currentTimeMillis())
                     .putString("auto_status", if (unchanged) {
