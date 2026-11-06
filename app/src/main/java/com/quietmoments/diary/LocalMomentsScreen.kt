@@ -149,7 +149,19 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         confirmButton = { TextButton(onClick = { val id = deleteId!!; deleteId = null; runTask { repo.deleteForever(id); "Удалено" } }) { Text("Удалить") } },
         dismissButton = { TextButton(onClick = { deleteId = null }) { Text("Отмена") } }
     )
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val albums = listOf("Все") + moments.filter { it.deletedAt == 0L }.map { it.album }.distinct().sorted()
+    val shown = moments.filter {
+        (it.deletedAt != 0L) == showTrash &&
+            (showTrash || selectedAlbum == "Все" || it.album == selectedAlbum)
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
             LocalDiaryHeading("Мой видеодневник", "Фото, видео и дорогие сердцу дни",
@@ -221,18 +233,19 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
-        val albums = listOf("Все") + moments.filter { it.deletedAt == 0L }.map { it.album }.distinct().sorted()
         ScrollableTabRow(selectedTabIndex = albums.indexOf(selectedAlbum).coerceAtLeast(0)) {
             albums.forEach { name ->
                 Tab(selected = selectedAlbum == name, onClick = { selectedAlbum = name },
                     text = { Text(name) })
             }
         }
-        val shown = moments.filter { (it.deletedAt != 0L) == showTrash && (showTrash || selectedAlbum == "Все" || it.album == selectedAlbum) }
         Text(if (showTrash) "Корзина · ${shown.size}" else "Воспоминания · ${shown.size}",
             style = MaterialTheme.typography.titleMedium)
         Text("Календарь: ${moments.count { it.deletedAt == 0L }} медиафайлов и ${entries.size} записей о настроении", style = MaterialTheme.typography.bodySmall)
-        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+            }
+        }
+
             items(shown, key = { it.id }) { moment ->
                 ElevatedCard(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
@@ -280,6 +293,5 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                     }
                 }
             }
-        }
     }
 }
