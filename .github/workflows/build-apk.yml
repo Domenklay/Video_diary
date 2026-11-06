@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v2.2-google-account-sync]
+    branches: [main, v2.2-google-account-sync, v2.3-backup-reliability]
   workflow_dispatch:
 
 permissions:
