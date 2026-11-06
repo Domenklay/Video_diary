@@ -101,9 +101,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
         mutableStateOf(if (introPrefs.getBoolean("questionnaire_seen", false)) "home" else "profile")
     }
     var profileBackTab by rememberSaveable { mutableStateOf("home") }
-    LaunchedEffect(Unit) {
-        introPrefs.edit().putBoolean("questionnaire_seen", true).apply()
-    }
+
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val tabStateHolder = rememberSaveableStateHolder()
 
@@ -134,6 +132,9 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     if (!unlocked) {
         DiaryUnlockScreen(lock, onUnlock = { unlocked = true })
         return
+    }
+    LaunchedEffect(Unit) {
+        introPrefs.edit().putBoolean("questionnaire_seen", true).apply()
     }
 
     Scaffold(
