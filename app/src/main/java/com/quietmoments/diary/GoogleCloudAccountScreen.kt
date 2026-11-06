@@ -62,6 +62,7 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
     var downloadFile by remember { mutableStateOf<File?>(null) }
     var preview by remember { mutableStateOf<BackupSummary?>(null) }
     var autoEnabled by remember { mutableStateOf(prefs.getBoolean("auto", false)) }
+    var lastSuccess by remember { mutableLongStateOf(prefs.getLong("last_success", 0L)) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
@@ -160,16 +161,27 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
         scope.launch {
             try {
                 val backup = withContext(Dispatchers.IO) {
+                    val before = GoogleCloudFiles.fingerprint(context)
                     val temp = GoogleCloudFiles.newFile(context)
                     try {
                         repo.exportBackup(GoogleCloudFiles.uri(context, temp))
+                        val afterExport = GoogleCloudFiles.fingerprint(context)
                         val uploaded = GoogleCloudDrive(token).upload(temp)
-                        uploaded to GoogleCloudFiles.fingerprint(context)
+                        val afterUpload = GoogleCloudFiles.fingerprint(context)
+                        Triple(uploaded,
+                            if (before == afterExport && before == afterUpload) before else "",
+                            before == afterExport && before == afterUpload)
                     } finally { temp.delete() }
                 }
+                val savedAt = System.currentTimeMillis()
                 prefs.edit().putString("fingerprint", backup.second)
-                    .putLong("last_success", System.currentTimeMillis()).apply()
-                status = "Сохранено в Google: " + backup.first.name
+                    .putLong("last_success", savedAt)
+                    .putString("auto_status", if (backup.third) "Последняя копия: " + backup.first.name
+                        else "Изменения во время сохранения будут переданы следующей копией.").apply()
+                lastSuccess = savedAt
+                status = if (backup.third) "Сохранено в Google: " + backup.first.name
+                    else "Копия сохранена в Google, но появились новые изменения. " +
+                        "Повтори сохранение, чтобы они тоже попали в облако."
                 backups = withContext(Dispatchers.IO) { GoogleCloudDrive(token).backups() }
             } catch (t: Throwable) {
                 error = t.localizedMessage ?: "Ошибка облачного сохранения"
@@ -309,6 +321,18 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
                     "Оно выполняется при открытом приложении, а не постоянно в фоне.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (lastSuccess > 0L) {
+                    val date = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+                        .withZone(ZoneId.systemDefault())
+                        .format(Instant.ofEpochMilli(lastSuccess))
+                    Text("Последняя успешная облачная копия: " + date,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary)
+                }
+                val automaticStatus = prefs.getString("auto_status", "").orEmpty()
+                if (automaticStatus.isNotBlank()) {
+                    Text(automaticStatus, style = MaterialTheme.typography.bodySmall)
+                }
                 if (email.isNotBlank()) {
                     OutlinedButton(onClick = {
                         prefs.edit().clear().apply()
