@@ -48,7 +48,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     var loadedForDate by rememberSaveable { mutableStateOf("") }
     var choosingDate by remember { mutableStateOf(false) }
     var answer by rememberSaveable { mutableStateOf("") }
-    var mood by rememberSaveable { mutableStateOf("Спокойно") }
+    var mood by rememberSaveable { mutableStateOf(profile.favoriteMood) }
     var moodReason by rememberSaveable { mutableStateOf("") }
     var journalOpen by rememberSaveable { mutableStateOf(false) }
     var captureFile by remember { mutableStateOf<File?>(null) }
@@ -79,7 +79,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
         day = value.toString()
         val old = entries.find { it.date == day }
         answer = old?.answer ?: ""
-        mood = old?.mood ?: "Спокойно"
+        mood = old?.mood ?: profile.favoriteMood
         moodReason = old?.reason ?: ""
     }
     LaunchedEffect(uid, initialDate) {
@@ -279,7 +279,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
             Text(currentQuestion)
             OutlinedTextField(answer, { answer = it }, label = { Text("Ответ") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                listOf("Радость","Спокойно","Грусть","Тревога").forEach { item ->
+                DiaryProfile.moods.forEach { item ->
                     FilterChip(selected = mood == item, onClick = { mood = item }, label = { Text(item) })
                 }
             }
