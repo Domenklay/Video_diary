@@ -114,16 +114,18 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     var unlocked by rememberSaveable { mutableStateOf(!lock.isEnabled()) }
     val introPrefs = remember(context) { context.getSharedPreferences("diary_onboarding", 0) }
     val migrationPrefs = remember(context) { context.getSharedPreferences("diary_migration", 0) }
+    val cloudWelcome = remember(context) { context.getSharedPreferences("qm_cloud_welcome", 0) }
     var currentTab by rememberSaveable {
         mutableStateOf(
             if (!migrationPrefs.getBoolean("transfer_screen_seen", false)) "transfer"
+            else if (!cloudWelcome.getBoolean("google_welcome_seen", false)) "cloud"
             else if (introPrefs.getBoolean("questionnaire_seen", false)) "home"
             else "profile"
         )
     }
     var profileBackTab by rememberSaveable { mutableStateOf("home") }
     var driveBackTab by rememberSaveable { mutableStateOf("settings") }
-    var cloudBackTab by rememberSaveable { mutableStateOf("settings") }
+    var cloudBackTab by rememberSaveable { mutableStateOf("home") }
 
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val tabStateHolder = rememberSaveableStateHolder()
@@ -241,7 +243,10 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         }
                     )
                     "cloud" -> GoogleCloudAccountScreen(
-                        onBack = { currentTab = cloudBackTab },
+                        onBack = {
+                            cloudWelcome.edit().putBoolean("google_welcome_seen", true).apply()
+                            currentTab = cloudBackTab
+                        },
                         onAppearanceRestored = { id, enabled ->
                             onSelectTheme(id)
                             onMotionChange(enabled)
