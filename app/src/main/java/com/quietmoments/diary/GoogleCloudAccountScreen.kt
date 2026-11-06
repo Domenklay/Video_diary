@@ -107,7 +107,7 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
                 error = "Вход через Google отменён"
                 busy = false
             } else {
-                val intent = result.data ?: error("Ответ Google отсутствует")
+                val intent = result.data ?: throw IllegalStateException("Ответ Google отсутствует")
                 authReady(client.getAuthorizationResultFromIntent(intent))
             }
         } catch (t: Throwable) {
