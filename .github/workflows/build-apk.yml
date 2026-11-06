@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v2.2-google-account-sync, v2.3-backup-reliability, v2.3.1-google-play-diagnostics, v2.4-safe-migration]
+    branches: [main, v2.2-google-account-sync, v2.3-backup-reliability, v2.3.1-google-play-diagnostics, v2.4-safe-migration, v2.5-universe-fast-navigation]
   workflow_dispatch:
 
 permissions:
@@ -38,6 +38,8 @@ jobs:
         run: node --test universe/tests/interpretations.test.cjs
       - name: Verify all 12 illustrated themes
         run: python3 universe/tests/theme_assets.py
+      - name: Verify Universe fast navigation contract
+        run: python3 universe/tests/fast_navigation.py
       - name: Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
