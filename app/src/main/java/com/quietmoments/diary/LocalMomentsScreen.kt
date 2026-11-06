@@ -37,7 +37,8 @@ import kotlinx.coroutines.withContext
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
-    initialDate: String = LocalDate.now().toString(), onOpenMoods: () -> Unit = {}) {
+    initialDate: String = LocalDate.now().toString(),
+    onOpenMoods: () -> Unit = {}, onOpenTransfer: () -> Unit = {}) {
     val context = LocalContext.current
     val palette = LocalDiaryPalette.current
     val repo = remember(uid) { LocalMediaRepository(context, uid) }
@@ -131,12 +132,11 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     }
     val createBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri -> if (uri != null) runTask { repo.exportBackup(uri); "Резервная копия сохранена" } }
-    val restoreBackup = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
     ) { uri -> if (uri != null) runTask {
-        val count = repo.importBackup(uri)
-        "Добавлено записей: $count"
+        val details = repo.exportBackup(uri)
+        "ZIP проверен: " + (details.photos + details.videos) +
+            " медиафайлов, " + details.diaryDays + " дней, " +
+            details.capsules + " капсул"
     } }
 
     if (choosingDate) {
@@ -305,7 +305,9 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = !busy, onClick = { pickMedia.launch(arrayOf("image/*", "video/*")) }) { Text("Добавить") }
             OutlinedButton(enabled = !busy, onClick = { createBackup.launch("QuietMoments_backup.zip") }) { Text("Копия") }
-            OutlinedButton(enabled = !busy, onClick = { restoreBackup.launch(arrayOf("application/zip", "application/octet-stream")) }) { Text("Импорт") }
+            OutlinedButton(enabled = !busy, onClick = onOpenTransfer) {
+                Text("Импорт и проверка")
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !showTrash, onClick = { showTrash = false; selectedAlbum = "Все" }, label = { Text("Альбомы") })
