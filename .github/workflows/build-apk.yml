@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v1.8-memories]
+    branches: [main, v1.8.1-profile-contrast]
   workflow_dispatch:
 
 permissions:
