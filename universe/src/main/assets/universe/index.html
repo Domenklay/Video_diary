@@ -216,6 +216,58 @@ input:focus,textarea:focus,select:focus{
 #compat-result,#number-reading{margin-top:13px;min-height:48px}
 #compat-result .notice,#number-reading .notice{margin:12px 0 0}
 .illustrated-card{margin-bottom:8px}
+
+/* v1.8.4: six additional original illustrated designs; synchronized with native Compose palettes. */
+:root[data-app-theme="moon_garden"]{
+ --bg:#111a37;--surface:#1b2448;--surface2:#2d345d;--gold:#d5b8fa;
+ --ink:#f9f5ff;--muted:#bdc0da;--line:#7276a7;--nav:#1b2448;
+ --heroA:#18234b;--heroB:#50458f;--highlight:#e4c6f7;--field:#222b51;--active:#2d345d;
+ --theme-art:url("themes/moon_garden.webp");
+}
+:root[data-app-theme="meadow"]{
+ --bg:#fbfff5;--surface:#fffef9;--surface2:#e8eed9;--gold:#365b3b;
+ --ink:#283e2b;--muted:#64735d;--line:#b5c6a7;--nav:#fffef9;
+ --heroA:#496a44;--heroB:#b4b86f;--highlight:#cea04c;--field:#fffef9;--active:#e8eed9;
+ --theme-art:url("themes/meadow.webp");
+}
+:root[data-app-theme="art_nouveau"]{
+ --bg:#f8f7e9;--surface:#fffcf0;--surface2:#e3eed9;--gold:#225d50;
+ --ink:#243e34;--muted:#586c56;--line:#a6c2a6;--nav:#fffcf0;
+ --heroA:#184c45;--heroB:#618b69;--highlight:#ceaa5d;--field:#fffcf0;--active:#e3eed9;
+ --theme-art:url("themes/art_nouveau.webp");
+}
+:root[data-app-theme="sakura"]{
+ --bg:#fff8fb;--surface:#fffdff;--surface2:#f8e8f0;--gold:#8a4666;
+ --ink:#4a3349;--muted:#79616e;--line:#ddadc5;--nav:#fffdff;
+ --heroA:#745477;--heroB:#c58ea8;--highlight:#e9a4ba;--field:#fffdff;--active:#f8e8f0;
+ --theme-art:url("themes/sakura.webp");
+}
+:root[data-app-theme="neon"]{
+ --bg:#161431;--surface:#222044;--surface2:#35305d;--gold:#8edef3;
+ --ink:#f3f0ff;--muted:#c5c5e9;--line:#7b6ca5;--nav:#222044;
+ --heroA:#281c6f;--heroB:#b044ba;--highlight:#b9d9ff;--field:#2c2953;--active:#35305d;
+ --theme-art:url("themes/neon.webp");
+}
+:root[data-app-theme="vintage"]{
+ --bg:#fff8ef;--surface:#fffdf9;--surface2:#f2e2d0;--gold:#71372f;
+ --ink:#4e2c2b;--muted:#76564d;--line:#c7a698;--nav:#fffdf9;
+ --heroA:#5b302f;--heroB:#995c4f;--highlight:#dfb36c;--field:#fffdf9;--active:#f2e2d0;
+ --theme-art:url("themes/vintage.webp");
+}
+:root[data-app-theme="moon_garden"] .app::before{opacity:.58}
+:root[data-app-theme="neon"] .app::before{opacity:.56}
+:root[data-app-theme="meadow"] .app::before,
+:root[data-app-theme="art_nouveau"] .app::before,
+:root[data-app-theme="sakura"] .app::before,
+:root[data-app-theme="vintage"] .app::before{opacity:.68}
+:root[data-app-theme="neon"] .primary,
+:root[data-app-theme="moon_garden"] .primary{color:#17162c;background:var(--gold)}
+:root[data-app-theme="neon"] .navbtn.active,
+:root[data-app-theme="moon_garden"] .navbtn.active{color:var(--gold)}
+/* Preserve opaque text cards against richly detailed illustrations. */
+:root[data-app-theme="neon"] .card,
+:root[data-app-theme="moon_garden"] .card{border:1.4px solid var(--line)}
+
 </style></head><body><div class="app"><header class="top"><div><div class="eyebrow">ТИХИЕ МОМЕНТЫ · МОЯ ВСЕЛЕННАЯ</div><h1 class="h1" id="pageTitle">Моя вселенная</h1><div class="subtitle" id="pageSubtitle">Маленькая магия каждого дня</div></div><div class="brandmoon">☾</div></header><main id="main"></main><nav class="nav" id="nav"></nav></div><script>
 'use strict';
 const K='myuniverse_v1';const SIGN=[['Овен','♈',3,21,4,19],['Телец','♉',4,20,5,20],['Близнецы','♊',5,21,6,20],['Рак','♋',6,21,7,22],['Лев','♌',7,23,8,22],['Дева','♍',8,23,9,22],['Весы','♎',9,23,10,22],['Скорпион','♏',10,23,11,21],['Стрелец','♐',11,22,12,21],['Козерог','♑',12,22,1,19],['Водолей','♒',1,20,2,18],['Рыбы','♓',2,19,3,20]];
