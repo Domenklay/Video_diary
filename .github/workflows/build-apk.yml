@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v1.8.2-profile-polish]
+    branches: [main, v1.8.3-universe-interpretations]
   workflow_dispatch:
 
 permissions:
@@ -30,6 +30,8 @@ jobs:
           fi
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --install "platforms;android-35" "build-tools;35.0.0"
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+      - name: Verify Universe descriptions
+        run: node --test universe/tests/interpretations.test.cjs
       - name: Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
