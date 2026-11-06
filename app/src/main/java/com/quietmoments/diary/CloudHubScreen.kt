@@ -43,15 +43,15 @@ fun CloudHubScreen(
     val format = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault())
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-        .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        .padding(horizontal = 15.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp)) {
         TextButton(onClick = onBack) {
             Icon(Icons.Default.ArrowBack, contentDescription = null)
             Spacer(Modifier.width(6.dp))
             Text("Настройки")
         }
-        LocalDiaryHeading("Облако и резервные копии",
-            "Google, Яндекс и сохранение в файлы — в одном месте")
+        LocalDiaryHeading("Облако и копии",
+            "Выбери удобный способ хранения воспоминаний")
         DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CloudDone, contentDescription = null, tint = palette.primary)
@@ -59,16 +59,17 @@ fun CloudHubScreen(
                 Text("Google Диск", style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold)
             }
-            Text(if (googleEmail.isBlank()) "Аккаунт не подключён"
-                else "Аккаунт: $googleEmail")
+            Text(if (googleEmail.isBlank()) "В этой установке аккаунт пока не подключён."
+                else googleEmail,
+                style = MaterialTheme.typography.bodySmall)
             Text(if (googleBackup > 0) "Последняя копия: " +
                 format.format(Instant.ofEpochMilli(googleBackup))
-                else "Подтверждённых облачных копий пока нет",
+                else "Новых копий здесь ещё не создавали.",
                 style = MaterialTheme.typography.bodySmall)
             Text(if (google.getBoolean("auto", false))
-                "Автосохранение: включено" else "Автосохранение: выключено",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                "Автокопирование включено" else "Автокопирование выключено",
+                style = MaterialTheme.typography.labelSmall,
+                color = palette.text)
             Button(onClick = onGoogle, modifier = Modifier.fillMaxWidth()) {
                 Text("Открыть Google Диск")
             }
@@ -82,11 +83,11 @@ fun CloudHubScreen(
             }
             Text(if (yandexBackup > 0) "Последняя копия: " +
                 format.format(Instant.ofEpochMilli(yandexBackup))
-                else "Подтверждённых облачных копий пока нет",
+                else "Новых копий здесь ещё не создавали.",
                 style = MaterialTheme.typography.bodySmall)
-            Text("Копии сохраняются вручную",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Ручное сохранение",
+                style = MaterialTheme.typography.labelSmall,
+                color = palette.text)
             Button(onClick = onYandex, modifier = Modifier.fillMaxWidth()) {
                 Text("Открыть Яндекс Диск")
             }
@@ -97,13 +98,13 @@ fun CloudHubScreen(
                 Spacer(Modifier.width(9.dp))
                 Text("Локальный ZIP-архив", style = MaterialTheme.typography.titleMedium)
             }
-            Text("Сохрани копию на телефон или выбери облачную папку " +
-                "через файловое окно Android. Вход через Google не нужен.")
+            Text("Экспорт, импорт и проверка ZIP-архива.",
+                style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = onManual, modifier = Modifier.fillMaxWidth()) {
                 Text("Сохранить или открыть ZIP")
             }
             TextButton(onClick = onTransfer, modifier = Modifier.fillMaxWidth()) {
-                Text("Перенос из предыдущих версий")
+                Text("Перенос из старой версии")
             }
         }
         DiarySectionCard {
@@ -112,8 +113,8 @@ fun CloudHubScreen(
                 Spacer(Modifier.width(9.dp))
                 Text("О защите данных", style = MaterialTheme.typography.titleMedium)
             }
-            Text("Оригиналы воспоминаний остаются на устройстве. " +
-                "Облачные ZIP-копии пока не зашифрованы отдельным паролем.",
+            Text("Оригиналы остаются на телефоне. Облачные ZIP-копии " +
+                "ещё не зашифрованы отдельным паролем.",
                 style = MaterialTheme.typography.bodySmall)
         }
     }
