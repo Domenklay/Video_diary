@@ -50,6 +50,29 @@ public final class UniverseActivity extends Activity {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return true; // no external navigation from offline content
             }
+            @Override public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                String theme = getIntent().getStringExtra("QM_THEME");
+                if (theme == null) {
+                    theme = getSharedPreferences("diary_theme", MODE_PRIVATE).getString("chosen", "moon");
+                }
+                if (theme == null || !theme.matches("moon|rose|forest|sea|dawn|night")) {
+                    theme = "moon";
+                }
+                view.evaluateJavascript(
+                    "document.documentElement.setAttribute('data-app-theme','" + theme + "')", null);
+                boolean dark = "night".equals(theme);
+                getWindow().setStatusBarColor(
+                    dark ? Color.rgb(16,29,42) :
+                    ("rose".equals(theme) ? Color.rgb(255,244,246) :
+                     "forest".equals(theme) ? Color.rgb(241,248,242) :
+                     "sea".equals(theme) ? Color.rgb(240,249,252) :
+                     "dawn".equals(theme) ? Color.rgb(255,248,235) : Color.rgb(250,244,252))));
+                getWindow().setNavigationBarColor(dark ? Color.rgb(22,38,51) : Color.rgb(255,251,255));
+                getWindow().getDecorView().setSystemUiVisibility(dark ? 0 :
+                    android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR |
+                    android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+            }
         });
         web.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> cb, FileChooserParams params) {
