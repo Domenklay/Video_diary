@@ -143,6 +143,25 @@ class DiaryProfileRepository(context: Context, uid: String = "offline") {
     }
 }
 
+/** Simple calendar boundaries matching the zodiac choices in «Моей вселенной». */
+private fun diarySignForDate(date: LocalDate): Int {
+    val code = date.monthValue * 100 + date.dayOfMonth
+    return when (code) {
+        in 321..419 -> 0
+        in 420..520 -> 1
+        in 521..620 -> 2
+        in 621..722 -> 3
+        in 723..822 -> 4
+        in 823..922 -> 5
+        in 923..1022 -> 6
+        in 1023..1121 -> 7
+        in 1122..1221 -> 8
+        in 120..218 -> 10
+        in 219..320 -> 11
+        else -> 9
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutMeQuestionnaire(onBack: () -> Unit) {
@@ -222,7 +241,11 @@ fun AboutMeQuestionnaire(onBack: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     picker.selectedDateMillis?.let {
-                        birth = LocalDate.ofEpochDay(it / 86_400_000L).toString()
+                        val chosen = LocalDate.ofEpochDay(it / 86_400_000L)
+                        if (!chosen.isAfter(LocalDate.now())) {
+                            birth = chosen.toString()
+                            sign = diarySignForDate(chosen)
+                        } else notice = "Дата рождения не может быть в будущем"
                     }
                     showDatePicker = false
                 }) { Text("Выбрать") }
