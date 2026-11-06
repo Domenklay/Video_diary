@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.quietmoments.universe.UniverseActivity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -122,6 +123,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     }
     var profileBackTab by rememberSaveable { mutableStateOf("home") }
     var driveBackTab by rememberSaveable { mutableStateOf("settings") }
+    var cloudBackTab by rememberSaveable { mutableStateOf("settings") }
 
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val tabStateHolder = rememberSaveableStateHolder()
@@ -153,6 +155,13 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     if (!unlocked) {
         DiaryUnlockScreen(lock, onUnlock = { unlocked = true })
         return
+    }
+    // Opt-in Google backup runs only while the diary is unlocked and the app is active.
+    LaunchedEffect(Unit) {
+        while (true) {
+            GoogleCloudAutoSync.ifNeeded(context)
+            delay(10 * 60 * 1000L)
+        }
     }
     LaunchedEffect(currentTab) {
         if (currentTab == "profile") {
@@ -213,6 +222,10 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         onOpenTransfer = { currentTab = "transfer" }
                     )
                     "transfer" -> DataTransferScreen(
+                        onOpenGoogleAccount = {
+                            cloudBackTab = "transfer"
+                            currentTab = "cloud"
+                        },
                         onOpenGoogleDrive = {
                             driveBackTab = "transfer"
                             currentTab = "drive"
@@ -222,6 +235,13 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             currentTab = if (introPrefs.getBoolean("questionnaire_seen", false)) "home"
                                 else "profile"
                         },
+                        onAppearanceRestored = { id, enabled ->
+                            onSelectTheme(id)
+                            onMotionChange(enabled)
+                        }
+                    )
+                    "cloud" -> GoogleCloudAccountScreen(
+                        onBack = { currentTab = cloudBackTab },
                         onAppearanceRestored = { id, enabled ->
                             onSelectTheme(id)
                             onMotionChange(enabled)
@@ -249,6 +269,10 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         onOpenGoogleDrive = {
                             driveBackTab = "settings"
                             currentTab = "drive"
+                        },
+                        onOpenGoogleAccount = {
+                            cloudBackTab = "settings"
+                            currentTab = "cloud"
                         },
                         onOpenProfile = { profileBackTab = "settings"; currentTab = "profile" },
                         themeId = themeId, onSelectTheme = onSelectTheme,
@@ -532,7 +556,7 @@ private fun DashboardTile(
 @Composable
 private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
     onOpenTransfer: () -> Unit, onOpenGoogleDrive: () -> Unit,
-    onOpenProfile: () -> Unit,
+    onOpenGoogleAccount: () -> Unit, onOpenProfile: () -> Unit,
     themeId: String, onSelectTheme: (String) -> Unit,
     motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
     val palette = LocalDiaryPalette.current
@@ -587,6 +611,22 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         }
         DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = palette.primary)
+                Spacer(Modifier.width(10.dp))
+                Text("Мой Google аккаунт", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+            }
+            Text("Войти через Google, сохранять копии в личном облаке " +
+                "и восстанавливать их на другом устройстве.")
+            Button(onClick = onOpenGoogleAccount, modifier = Modifier.fillMaxWidth()) {
+                Text("Войти и подключить синхронизацию")
+            }
+            Text("Автоматическое сохранение включается отдельно с твоего согласия.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        DiarySectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CloudUpload, contentDescription = null, tint = palette.primary)
                 Spacer(Modifier.width(10.dp))
                 Text("Google Диск", style = MaterialTheme.typography.titleMedium,
@@ -620,7 +660,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v2.1 · Google Диск и проверяемые облачные копии", style = MaterialTheme.typography.bodySmall)
+            Text("v2.2 · Google аккаунт и облачные сохранения", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
