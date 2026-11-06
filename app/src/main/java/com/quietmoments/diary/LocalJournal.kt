@@ -1,6 +1,7 @@
 package com.quietmoments.diary
 
 import android.content.Context
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -12,8 +13,9 @@ class LocalJournal(context: Context, uid: String) {
     private val root = File(context.filesDir, "local_moments/${uid.replace(Regex("[^A-Za-z0-9_-]"), "_")}").apply { mkdirs() }
     private val target = File(root, "reflections.json")
     @Synchronized fun all(): List<DailyReflection> {
-        if (!target.exists()) return emptyList()
-        val a = JSONArray(target.readText(Charsets.UTF_8))
+        if (!target.exists() && !File(target.absolutePath + ".bak").exists()) return emptyList()
+        val text = AtomicFile(target).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val a = JSONArray(text)
         return (0 until a.length()).map { i ->
             val x = a.getJSONObject(i)
             DailyReflection(x.getString("date"), x.getString("question"), x.optString("answer"), x.optString("mood"))
@@ -26,9 +28,15 @@ class LocalJournal(context: Context, uid: String) {
         updated.sortedBy { it.date }.forEach { d -> a.put(JSONObject().apply {
             put("date", d.date); put("question", d.question); put("answer", d.answer); put("mood", d.mood)
         }) }
-        val temp = File(root,"reflections.pending")
-        temp.writeText(a.toString(),Charsets.UTF_8)
-        if (!temp.renameTo(target)) {temp.copyTo(target,overwrite=true);temp.delete()}
+        val atomic = AtomicFile(target)
+        val stream = atomic.startWrite()
+        try {
+            stream.write(a.toString().toByteArray(Charsets.UTF_8))
+            atomic.finishWrite(stream)
+        } catch (t: Throwable) {
+            atomic.failWrite(stream)
+            throw t
+        }
     }
     companion object {
         val questions = listOf(
