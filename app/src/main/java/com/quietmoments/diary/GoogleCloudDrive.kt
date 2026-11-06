@@ -9,7 +9,6 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -165,44 +164,12 @@ object GoogleCloudFiles {
      * videos/photos just to check whether an automatic upload is needed.
      */
     fun fingerprint(context: Context): String {
-        val digest = MessageDigest.getInstance("SHA-256")
         val sources = listOf(
             "moments" to File(context.filesDir, "local_moments/offline"),
             "universe" to File(context.filesDir, "universe_backup")
         )
-        sources.forEach { (scope, folder) ->
-            if (folder.isDirectory) {
-                folder.walkTopDown()
-                    .filter { file ->
-                        file.isFile && !file.relativeTo(folder).invariantSeparatorsPath
-                            .startsWith("restore_")
-                    }
-                    .sortedBy { it.relativeTo(folder).invariantSeparatorsPath }
-                    .forEach { file ->
-                        val relative = file.relativeTo(folder).invariantSeparatorsPath
-                        val identity = "$scope/$relative:" + file.length() + ":" +
-                            file.lastModified() + "\n"
-                        digest.update(identity.toByteArray(Charsets.UTF_8))
-                        // Metadata can change without changing length or mtime.
-                        // Content-check the small JSON files, not media recordings.
-                        if (file.extension == "json" && file.length() <= 2_000_000L) {
-                            file.inputStream().use { input ->
-                                val chunk = ByteArray(16 * 1024)
-                                while (true) {
-                                    val read = input.read(chunk)
-                                    if (read < 0) break
-                                    digest.update(chunk, 0, read)
-                                }
-                            }
-                        }
-                    }
-            }
-        }
         val appearance = "theme=" + DiaryThemes.load(context) +
             ";motion=" + ThemeMotionPreferences.read(context)
-        digest.update(appearance.toByteArray(Charsets.UTF_8))
-        return "v2:" + digest.digest().joinToString("") { b ->
-            (b.toInt() and 255).toString(16).padStart(2, '0')
-        }
+        return CloudSnapshotFingerprint.calculate(sources, appearance)
     }
 }
