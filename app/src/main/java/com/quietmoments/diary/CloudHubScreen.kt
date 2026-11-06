@@ -124,8 +124,8 @@ fun CloudHubScreen(
                 Spacer(Modifier.width(9.dp))
                 Text("О защите данных", style = MaterialTheme.typography.titleMedium)
             }
-            Text("Оригиналы остаются на телефоне. Облачные ZIP-копии " +
-                "ещё не зашифрованы отдельным паролем.",
+            Text("Обычные облачные ZIP-копии не зашифрованы. " +
+                "Для защиты паролем используй отдельный архив .qmb.",
                 style = MaterialTheme.typography.bodySmall)
         }
     }
