@@ -30,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, initialDate: String = LocalDate.now().toString()) {
     val context = LocalContext.current
@@ -37,7 +38,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
     val journal = remember(uid) { LocalJournal(context, uid) }
     var entries by remember(uid) { mutableStateOf(emptyList<DailyReflection>()) }
     var day by remember(initialDate) { mutableStateOf(initialDate) }
-    var dateDraft by remember { mutableStateOf(day) }
+    var choosingDate by remember { mutableStateOf(false) }
     var answer by remember { mutableStateOf("") }
     var mood by remember { mutableStateOf("Спокойно") }
     var journalOpen by remember(initialDate) { mutableStateOf(false) }
@@ -64,7 +65,6 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
     }
     fun selectDate(value: LocalDate) {
         day = value.toString()
-        dateDraft = day
         val old = entries.find { it.date == day }
         answer = old?.answer ?: ""
         mood = old?.mood ?: "Спокойно"
@@ -121,6 +121,28 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         val count = repo.importBackup(uri)
         "Добавлено записей: $count"
     } }
+
+    if (choosingDate) {
+        val chosenMillis = runCatching { LocalDate.parse(day).toEpochDay() * 86_400_000L }
+            .getOrDefault(LocalDate.now().toEpochDay() * 86_400_000L)
+        val picker = rememberDatePickerState(initialSelectedDateMillis = chosenMillis)
+        DatePickerDialog(
+            onDismissRequest = { choosingDate = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    picker.selectedDateMillis?.let { millis ->
+                        selectDate(LocalDate.ofEpochDay(millis / 86_400_000L))
+                    }
+                    choosingDate = false
+                }) { Text("Выбрать") }
+            },
+            dismissButton = {
+                TextButton(onClick = { choosingDate = false }) { Text("Отмена") }
+            }
+        ) {
+            DatePicker(state = picker, showModeToggle = true)
+        }
+    }
 
     if (editing != null) AlertDialog(
         onDismissRequest = { editing = null },
@@ -183,15 +205,8 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (journalOpen) {
             Text("Ежедневный вопрос", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(dateDraft, onValueChange = { dateDraft = it },
-                    label = { Text("Дата ГГГГ-ММ-ДД") }, singleLine = true,
-                    modifier = Modifier.weight(1f))
-                TextButton(onClick = {
-                    runCatching { LocalDate.parse(dateDraft) }
-                        .onSuccess { selectDate(it) }
-                        .onFailure { error = "Укажите дату в формате ГГГГ-ММ-ДД" }
-                }) { Text("Открыть") }
+            OutlinedButton(onClick = { choosingDate = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Выбрать дату: $day")
             }
             val selectedDate = runCatching { LocalDate.parse(day) }.getOrDefault(LocalDate.now())
             val activeDates = remember(entries, moments) {
