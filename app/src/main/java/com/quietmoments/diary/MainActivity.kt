@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             var themeId by rememberSaveable { mutableStateOf(DiaryThemes.load(context)) }
             val palette = DiaryThemes.byId(themeId)
+            var motionEnabled by rememberSaveable { mutableStateOf(ThemeMotionPreferences.read(context)) }
             SideEffect {
                 window.statusBarColor = palette.page.toArgb()
                 window.navigationBarColor = palette.surface.toArgb()
@@ -73,11 +74,14 @@ class MainActivity : ComponentActivity() {
                         android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
                         android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
             }
-            CompositionLocalProvider(LocalDiaryPalette provides palette) {
+            CompositionLocalProvider(LocalDiaryPalette provides palette, LocalThemeMotionEnabled provides motionEnabled) {
                 MaterialTheme(colorScheme = palette.scheme()) {
                     QuietMomentsApp(themeId = themeId, onSelectTheme = { newId ->
                         DiaryThemes.save(context, newId)
                         themeId = newId
+                    }, motionEnabled = motionEnabled, onMotionChange = { newValue ->
+                        ThemeMotionPreferences.write(context, newValue)
+                        motionEnabled = newValue
                     })
                 }
             }
@@ -86,7 +90,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit) {
+private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
+    motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
     val palette = LocalDiaryPalette.current
     val context = LocalContext.current
     val lock = remember { DiaryPinLock(context) }
@@ -111,7 +116,8 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit) {
         }
     }
     fun openUniverse() {
-        universeLauncher.launch(Intent(context, UniverseActivity::class.java).putExtra("QM_THEME", themeId))
+        universeLauncher.launch(Intent(context, UniverseActivity::class.java)
+            .putExtra("QM_THEME", themeId).putExtra("QM_MOTION", motionEnabled))
     }
     fun selectTab(tab: String) {
         if (tab == "universe") openUniverse()
@@ -151,7 +157,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit) {
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             Crossfade(targetState = palette.id, modifier = Modifier.fillMaxSize(),
-                animationSpec = tween(durationMillis = 320), label = "Фон темы") { theme ->
+                animationSpec = tween(durationMillis = if (motionEnabled) 320 else 0), label = "Фон темы") { theme ->
                 val displayed = DiaryThemes.byId(theme)
                 IllustratedThemeBackground(
                     palette = displayed,
@@ -160,6 +166,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit) {
                     alignment = Alignment.TopCenter
                 )
             }
+            LivingThemeParticles(palette, Modifier.fillMaxSize(), strength = .60f)
             tabStateHolder.SaveableStateProvider(currentTab) {
                 when (currentTab) {
                     "diary" -> LocalMomentsScreen(
@@ -167,7 +174,8 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit) {
                         onClose = { currentTab = "home" }
                     )
                     "settings" -> DiarySettingsPage(lock, onOpenDiary = { currentTab = "diary" },
-                        themeId = themeId, onSelectTheme = onSelectTheme)
+                        themeId = themeId, onSelectTheme = onSelectTheme,
+                        motionEnabled = motionEnabled, onMotionChange = onMotionChange)
                     else -> DiaryHomePage(
                         onOpenDiary = { currentTab = "diary" },
                         onOpenUniverse = { openUniverse() },
@@ -231,11 +239,13 @@ private fun DiaryHomePage(
                 .background(Brush.linearGradient(listOf(palette.heroStart, palette.heroEnd)))
         ) {
             IllustratedThemeBackground(palette, modifier = Modifier.fillMaxSize(), alpha = 1f)
+            LivingThemeParticles(palette, Modifier.fillMaxSize(), strength = 1f)
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.verticalGradient(listOf(Color(0x52221836), Color(0xB6211537)))
                 )
             )
+            DecorativeFrame(palette, Modifier.matchParentSize())
             Column(
                 Modifier.align(Alignment.BottomStart).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -341,7 +351,9 @@ private fun DashboardTile(
 }
 
 @Composable
-private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit, themeId: String, onSelectTheme: (String) -> Unit) {
+private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
+    themeId: String, onSelectTheme: (String) -> Unit,
+    motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
     val palette = LocalDiaryPalette.current
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
@@ -349,6 +361,21 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit, theme
     ) {
         LocalDiaryHeading("Настройки", "Персонализация и защита твоих воспоминаний")
         ThemeGallery(selectedId = themeId, onSelect = onSelectTheme)
+        DiarySectionCard {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Живые темы", style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold)
+                    Text("Медленное движение звёзд, цветов, листьев и пузырьков",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = motionEnabled, onCheckedChange = onMotionChange)
+            }
+            Text("Можно отключить, чтобы снизить расход батареи.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Lock, contentDescription = null, tint = palette.primary)
@@ -375,7 +402,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit, theme
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v1.5 · рисованные темы и иконка", style = MaterialTheme.typography.bodySmall)
+            Text("v1.7 · живые темы и обложки альбомов", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
