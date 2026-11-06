@@ -152,11 +152,9 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
-            LocalDiaryHeading("Мои воспоминания", "Фото, видео и дорогие сердцу дни",
+            LocalDiaryHeading("Мой видеодневник", "Фото, видео и дорогие сердцу дни",
                 modifier = Modifier.weight(1f))
-            TextButton(onClick = onClose) { Text("Назад") }
         }
-        DiaryPinSettings(pinLock)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { journalOpen = !journalOpen }, modifier = Modifier.weight(1f)) {
                 Text(if (journalOpen) "Скрыть календарь" else "Календарь")
@@ -169,7 +167,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                 captureVideo.launch(captureUri!!)
             }) { Text("Записать видео") }
         }
-        Text("Твои новые записи хранятся на устройстве", style = MaterialTheme.typography.labelSmall,
+        Text("Все воспоминания хранятся только на твоём устройстве", style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (journalOpen) {
             Text("Ежедневный вопрос", style = MaterialTheme.typography.titleMedium)
@@ -206,7 +204,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
             entries.groupingBy { it.mood }.eachCount().forEach { (label, count) -> Text("$label — $count") }
         }
         DiarySectionCard {
-            Text("Добавить воспоминание · $day", style = MaterialTheme.typography.titleMedium)
+            Text("Добавить воспоминание · $day", style = MaterialTheme.typography.titleLarge)
             OutlinedTextField(title, { title = it }, label = { Text("Название") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(album, { album = it }, label = { Text("Альбом") },
