@@ -250,6 +250,10 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         onAppearanceRestored = { id, enabled ->
                             onSelectTheme(id)
                             onMotionChange(enabled)
+                        },
+                        onOpenManualDrive = {
+                            driveBackTab = "cloud"
+                            currentTab = "drive"
                         }
                     )
                     "drive" -> GoogleDriveBackupScreen(
