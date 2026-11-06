@@ -2,6 +2,10 @@ package com.quietmoments.diary
 
 import android.content.Context
 import android.net.Uri
+import android.util.AtomicFile
+import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -14,7 +18,8 @@ import java.util.zip.ZipOutputStream
 /** Local-only media library, separate from existing Firebase documents. */
 data class LocalMoment(
     val id: String, val album: String, val title: String,
-    val kind: String, val fileName: String, val createdAt: Long, val deletedAt: Long = 0
+    val kind: String, val fileName: String, val createdAt: Long, val deletedAt: Long = 0,
+    val memoryDate: String = Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalDate().toString()
 )
 
 class LocalMediaRepository(private val context: Context, uid: String) {
@@ -30,7 +35,10 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             (0 until array.length()).map { i ->
                 val item = array.getJSONObject(i)
                 LocalMoment(item.getString("id"), item.getString("album"), item.getString("title"),
-                    item.getString("kind"), item.getString("fileName"), item.getLong("createdAt"), item.optLong("deletedAt", 0))
+                    item.getString("kind"), item.getString("fileName"), item.getLong("createdAt"), item.optLong("deletedAt", 0),
+                    item.optString("memoryDate", "").ifBlank {
+                        Instant.ofEpochMilli(item.getLong("createdAt")).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+                    })
             }
         }.getOrElse { throw IllegalStateException("Не удалось прочитать локальный каталог", it) }
     }
@@ -39,17 +47,20 @@ class LocalMediaRepository(private val context: Context, uid: String) {
         val array = JSONArray()
         items.forEach { m -> array.put(JSONObject().apply {
             put("id", m.id); put("album", m.album); put("title", m.title)
-            put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt)
+            put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt); put("memoryDate", m.memoryDate)
         }) }
-        val tmp = File(root, "index.pending")
-        tmp.writeText(array.toString(), Charsets.UTF_8)
-        if (!tmp.renameTo(index)) {
-            tmp.copyTo(index, overwrite = true)
-            tmp.delete()
-        }
+        writeAtomic(index, array.toString().toByteArray(Charsets.UTF_8))
     }
 
-    @Synchronized fun add(uri: Uri, title: String, album: String, mime: String?): LocalMoment {
+    private fun writeAtomic(target: File, bytes: ByteArray) {
+        val atomic = AtomicFile(target)
+        val output = atomic.startWrite()
+        try { output.write(bytes); atomic.finishWrite(output) }
+        catch (t: Throwable) { atomic.failWrite(output); throw t }
+    }
+
+    @Synchronized fun add(uri: Uri, title: String, album: String, mime: String?, memoryDate: String = LocalDate.now().toString()): LocalMoment {
+        LocalDate.parse(memoryDate)
         val kind = if (mime?.startsWith("video/") == true) "video" else "photo"
         val id = UUID.randomUUID().toString()
         val target = File(media, "$id.${if (kind == "video") "mp4" else "img"}")
@@ -60,7 +71,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             }
             val item = LocalMoment(id, album.trim().ifBlank { "Без альбома" }.take(120),
                 title.trim().ifBlank { "Воспоминание" }.take(180), kind,
-                target.name, System.currentTimeMillis())
+                target.name, System.currentTimeMillis(), memoryDate = memoryDate)
             store(list() + item)
             return item
         } catch (t: Throwable) {
@@ -78,10 +89,11 @@ class LocalMediaRepository(private val context: Context, uid: String) {
     }
 
     /** Edit only metadata; original media bytes and IDs remain unchanged. */
-    @Synchronized fun updateDetails(id: String, title: String, album: String) {
+    @Synchronized fun updateDetails(id: String, title: String, album: String, memoryDate: String) {
+        LocalDate.parse(memoryDate)
         require(title.isNotBlank()) { "Название не может быть пустым" }
         store(list().map { item -> if (item.id == id && item.deletedAt == 0L)
-            item.copy(title = title.trim().take(180), album = album.trim().ifBlank { "Без альбома" }.take(120))
+            item.copy(title = title.trim().take(180), album = album.trim().ifBlank { "Без альбома" }.take(120), memoryDate = memoryDate)
             else item })
     }
 
