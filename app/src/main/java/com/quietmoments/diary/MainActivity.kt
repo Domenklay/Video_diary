@@ -171,7 +171,16 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                 when (currentTab) {
                     "diary" -> LocalMomentsScreen(
                         uid = "offline", pinLock = lock, initialDate = chosenDate,
-                        onClose = { currentTab = "home" }
+                        onClose = { currentTab = "home" },
+                        onOpenMoods = { currentTab = "moods" }
+                    )
+                    "capsules" -> TimeCapsuleScreen(onBack = { currentTab = "home" })
+                    "moods" -> MoodInsightsScreen(
+                        onBack = { currentTab = "home" },
+                        onOpenDay = { selected ->
+                            chosenDate = selected
+                            currentTab = "diary"
+                        }
                     )
                     "settings" -> DiarySettingsPage(lock, onOpenDiary = { currentTab = "diary" },
                         themeId = themeId, onSelectTheme = onSelectTheme,
@@ -179,7 +188,13 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                     else -> DiaryHomePage(
                         onOpenDiary = { currentTab = "diary" },
                         onOpenUniverse = { openUniverse() },
-                        onOpenSettings = { currentTab = "settings" }
+                        onOpenSettings = { currentTab = "settings" },
+                        onOpenCapsules = { currentTab = "capsules" },
+                        onOpenMoods = { currentTab = "moods" },
+                        onOpenDay = { selected ->
+                            chosenDate = selected
+                            currentTab = "diary"
+                        }
                     )
                 }
             }
@@ -187,13 +202,19 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     }
 }
 
-private data class DiaryCounts(val media: Int, val days: Int, val newest: String?)
+private data class DiaryCounts(val media: Int, val days: Int, val newest: String?,
+    val anniversaries: List<LocalMoment> = emptyList(),
+    val anniversaryReflections: List<DailyReflection> = emptyList(),
+    val sealedCapsules: Int = 0)
 
 @Composable
 private fun DiaryHomePage(
     onOpenDiary: () -> Unit,
     onOpenUniverse: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onOpenCapsules: () -> Unit,
+    onOpenMoods: () -> Unit,
+    onOpenDay: (String) -> Unit
 ) {
     val palette = LocalDiaryPalette.current
     val context = LocalContext.current
@@ -202,8 +223,29 @@ private fun DiaryHomePage(
         counts = withContext(Dispatchers.IO) {
             runCatching {
                 val media = LocalMediaRepository(context, "offline").list().filter { it.deletedAt == 0L }
-                val days = LocalJournal(context, "offline").all().size
-                DiaryCounts(media.size, days, media.maxByOrNull { it.createdAt }?.title)
+                val journalEntries = LocalJournal(context, "offline").all()
+                val today = LocalDate.now()
+                val matches = media.filter {
+                    runCatching {
+                        val date = LocalDate.parse(it.memoryDate)
+                        date.year < today.year &&
+                            date.monthValue == today.monthValue &&
+                            date.dayOfMonth == today.dayOfMonth
+                    }.getOrDefault(false)
+                }.sortedByDescending { it.memoryDate }.take(4)
+                val reflected = journalEntries.filter {
+                    runCatching {
+                        val date = LocalDate.parse(it.date)
+                        date.year < today.year &&
+                            date.monthValue == today.monthValue &&
+                            date.dayOfMonth == today.dayOfMonth
+                    }.getOrDefault(false)
+                }.sortedByDescending { it.date }.take(4)
+                val sealedCount = TimeCapsuleRepository(context, "offline").all()
+                    .count { !it.ready(today) }
+                DiaryCounts(media.size, journalEntries.size,
+                    media.maxByOrNull { it.createdAt }?.title,
+                    matches, reflected, sealedCount)
             }.getOrDefault(DiaryCounts(0, 0, null))
         }
     }
@@ -282,6 +324,43 @@ private fun DiaryHomePage(
                 "Моя вселенная", "Гороскопы, Луна и карты", Icons.Default.NightsStay,
                 palette.soft, palette.primary, onOpenUniverse, Modifier.weight(1f)
             )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            DashboardTile(
+                "Капсула времени", "Письма и видео в будущее",
+                Icons.Default.MarkEmailUnread,
+                palette.secondarySoft, palette.primary,
+                onOpenCapsules, Modifier.weight(1f)
+            )
+            DashboardTile(
+                "Моё настроение", "Календарь и история эмоций",
+                Icons.Default.Favorite,
+                palette.soft, palette.primary,
+                onOpenMoods, Modifier.weight(1f)
+            )
+        }
+        DiarySectionCard {
+            Text("В этот день", style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold)
+            if (counts.anniversaries.isEmpty() &&
+                counts.anniversaryReflections.isEmpty()) {
+                Text("Здесь появятся воспоминания, записанные в этот же день в прошлые годы.",
+                    style = MaterialTheme.typography.bodyMedium)
+            } else {
+                counts.anniversaries.forEach { memory ->
+                    TextButton(onClick = { onOpenDay(memory.memoryDate) }) {
+                        Column {
+                            Text(memory.title, style = MaterialTheme.typography.titleSmall)
+                            Text(memory.memoryDate, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+                counts.anniversaryReflections.forEach { reflection ->
+                    TextButton(onClick = { onOpenDay(reflection.date) }) {
+                        Text("Запись " + reflection.date + " · " + reflection.mood)
+                    }
+                }
+            }
         }
         UniverseBanner(onOpen = onOpenUniverse)
         DiarySectionCard {
@@ -402,7 +481,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v1.7 · живые темы и обложки альбомов", style = MaterialTheme.typography.bodySmall)
+            Text("v1.8 · страницы, капсулы времени и настроение", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
