@@ -8,3 +8,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+dependencies {
+    implementation("androidx.core:core:1.15.0")
+}
