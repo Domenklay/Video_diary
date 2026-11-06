@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v2.2-google-account-sync, v2.3-backup-reliability, v2.3.1-google-play-diagnostics, v2.4-safe-migration, v2.5-universe-fast-navigation]
+    branches: [main, v2.2-google-account-sync, v2.3-backup-reliability, v2.3.1-google-play-diagnostics, v2.4-safe-migration, v2.5-universe-fast-navigation, v2.6-yandex-drive]
   workflow_dispatch:
 
 permissions:
@@ -48,6 +48,9 @@ jobs:
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
       - name: Compile debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Print preview APK identity and public certificate fingerprints
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
