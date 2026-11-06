@@ -156,7 +156,7 @@ fun IllustratedThemeBackground(
             bitmap = illustration,
             contentDescription = null,
             modifier = modifier,
-            contentScale = ContentScale.Crop,
+            contentScale = if (preview) ContentScale.Fit else ContentScale.Crop,
             alignment = alignment,
             alpha = alpha
         )
@@ -253,50 +253,69 @@ fun ThemeOrnament(palette: DiaryPalette, modifier: Modifier = Modifier) {
 
 @Composable
 fun ThemeGallery(selectedId: String, onSelect: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Темы оформления", style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold)
-        Text("Рисунки, узоры и цвета меняются во всём приложении.",
-            style = MaterialTheme.typography.bodySmall,
+    val palette = LocalDiaryPalette.current
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("Коллекция тем", style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+        Text("Выбери свою атмосферу. Каждая тема содержит рисунок, цвета и оформление карточек.",
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         DiaryThemes.all.chunked(2).forEach { pair ->
-            Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 pair.forEach { option ->
                     val checked = selectedId == option.id
                     Card(
-                        modifier=Modifier.weight(1f).clickable { onSelect(option.id) },
-                        colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),
-                        shape=RoundedCornerShape(20.dp),
-                        border = if(checked) androidx.compose.foundation.BorderStroke(
-                            2.dp, MaterialTheme.colorScheme.primary
-                        ) else null
+                        modifier = Modifier.weight(1f).clickable { onSelect(option.id) },
+                        colors = CardDefaults.cardColors(containerColor = palette.surface),
+                        shape = RoundedCornerShape(22.dp),
+                        border = if (checked) androidx.compose.foundation.BorderStroke(2.dp,
+                            MaterialTheme.colorScheme.primary)
+                        else androidx.compose.foundation.BorderStroke(1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = .35f))
                     ) {
-                        Column(Modifier.fillMaxWidth().padding(8.dp),
-                            verticalArrangement=Arrangement.spacedBy(7.dp)) {
-                            Box(Modifier.fillMaxWidth().height(104.dp)
-                                .clip(RoundedCornerShape(15.dp))
-                                .background(Brush.linearGradient(listOf(option.heroStart,option.heroEnd)))) {
-                                IllustratedThemeBackground(option, Modifier.fillMaxSize(), preview = true)
-                                Box(Modifier.fillMaxSize().background(
-                                    Brush.verticalGradient(listOf(Color(0x22000000), Color(0x66000000)))
-                                ))
-                                Text(option.symbol, modifier=Modifier.align(Alignment.CenterStart)
-                                    .padding(start=16.dp), color=option.accent,
-                                    style=MaterialTheme.typography.headlineLarge)
-                                if(checked) Icon(Icons.Default.CheckCircle,"Выбрано",
-                                    modifier=Modifier.align(Alignment.TopEnd).padding(8.dp),
-                                    tint=Color.White)
+                        Column(Modifier.fillMaxWidth().padding(7.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(230.dp)
+                                    .clip(RoundedCornerShape(17.dp))
+                                    .background(option.heroStart)
+                            ) {
+                                IllustratedThemeBackground(
+                                    palette = option,
+                                    modifier = Modifier.fillMaxSize(),
+                                    preview = true,
+                                    alpha = 1f
+                                )
+                                if (checked) {
+                                    Box(
+                                        Modifier.align(Alignment.TopEnd).padding(8.dp)
+                                            .clip(RoundedCornerShape(50))
+                                            .background(Color(0xDF251B37))
+                                            .padding(5.dp)
+                                    ) {
+                                        Icon(Icons.Default.CheckCircle,
+                                            contentDescription = "Текущая тема",
+                                            modifier = Modifier.size(21.dp),
+                                            tint = Color.White)
+                                    }
+                                }
                             }
-                            Text(option.name, style=MaterialTheme.typography.labelLarge,
-                                fontWeight=FontWeight.Bold)
-                            Text(option.description, style=MaterialTheme.typography.labelSmall,
-                                color=MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines=2)
+                            Text(option.name,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = palette.text,
+                                maxLines = 2)
+                            Text(option.description,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = palette.muted,
+                                maxLines = 3)
                         }
                     }
                 }
-                if(pair.size==1) Spacer(Modifier.weight(1f))
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
+        Text("Тема меняется без удаления записей и сохраняется после перезапуска.",
+            color = palette.muted, style = MaterialTheme.typography.bodySmall)
     }
 }
