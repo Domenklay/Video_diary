@@ -4,9 +4,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Image
@@ -78,6 +76,20 @@ class MainActivity : ComponentActivity() {
         if (hasFocus) applySystemNavigation(DiaryThemes.byId(DiaryThemes.load(this)).dark)
     }
 
+    // Navigation commands are one-shot and live only in RAM, not in private diary files.
+    private var universeNavigation by mutableStateOf<Bundle?>(null)
+
+    override fun onResume() {
+        super.onResume()
+        UniverseActivity.consumeNavigation()?.let { universeNavigation = it }
+    }
+
+    override fun onBackPressed() {
+        // The Universe activity can remain behind MainActivity for instant returns.
+        // Back from the main screen must exit instead of exposing it unexpectedly.
+        finishAffinity()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -92,7 +104,10 @@ class MainActivity : ComponentActivity() {
             }
             CompositionLocalProvider(LocalDiaryPalette provides palette, LocalThemeMotionEnabled provides motionEnabled) {
                 MaterialTheme(colorScheme = palette.scheme()) {
-                    QuietMomentsApp(themeId = themeId, onSelectTheme = { newId ->
+                    QuietMomentsApp(themeId = themeId,
+                        universeNavigation = universeNavigation,
+                        onUniverseNavigationConsumed = { universeNavigation = null },
+                        onSelectTheme = { newId ->
                         DiaryThemes.save(context, newId)
                         themeId = newId
                     }, motionEnabled = motionEnabled, onMotionChange = { newValue ->
@@ -107,7 +122,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
-    motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
+    motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit,
+    universeNavigation: Bundle?, onUniverseNavigationConsumed: () -> Unit) {
     val palette = LocalDiaryPalette.current
     val context = LocalContext.current
     val lock = remember { DiaryPinLock(context) }
@@ -132,23 +148,12 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     val tabStateHolder = rememberSaveableStateHolder()
 
-    val universeLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { response ->
-        val action = response.data?.getStringExtra(UniverseActivity.RESULT_ACTION)
-        when (action) {
-            "NEW_DIARY_ENTRY", "NAVIGATE_DIARY" -> {
-                val date = response.data?.getStringExtra(UniverseActivity.RESULT_DATE).orEmpty()
-                chosenDate = runCatching { LocalDate.parse(date).toString() }
-                    .getOrDefault(LocalDate.now().toString())
-                currentTab = "diary"
-            }
-            "NAVIGATE_SETTINGS" -> currentTab = "settings"
-            "NAVIGATE_HOME" -> currentTab = "home"
-        }
-    }
     fun openUniverse() {
-        universeLauncher.launch(Intent(context, UniverseActivity::class.java)
+        // Move the existing UniverseActivity to the foreground. Its WebView and
+        // JavaScript state remain loaded when switching back to native tabs.
+        // A new instance is created only if Android has already discarded it.
+        context.startActivity(Intent(context, UniverseActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra("QM_THEME", themeId).putExtra("QM_MOTION", motionEnabled))
     }
     fun selectTab(tab: String) {
@@ -159,6 +164,23 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     if (!unlocked) {
         DiaryUnlockScreen(lock, onUnlock = { unlocked = true })
         return
+    }
+    // Receive navigation after the PIN gate, including after a restored Activity.
+    // No saved PIN-unlocked state or duplicated WebView is needed.
+    LaunchedEffect(universeNavigation) {
+        universeNavigation?.let { navigation ->
+            when (navigation.getString(UniverseActivity.RESULT_ACTION)) {
+                "NEW_DIARY_ENTRY", "NAVIGATE_DIARY" -> {
+                    val date = navigation.getString(UniverseActivity.RESULT_DATE).orEmpty()
+                    chosenDate = runCatching { LocalDate.parse(date).toString() }
+                        .getOrDefault(LocalDate.now().toString())
+                    currentTab = "diary"
+                }
+                "NAVIGATE_SETTINGS" -> currentTab = "settings"
+                "NAVIGATE_HOME" -> currentTab = "home"
+            }
+            onUniverseNavigationConsumed()
+        }
     }
     // Opt-in Google backup runs only while the diary is unlocked and the app is active.
     LaunchedEffect(Unit) {
