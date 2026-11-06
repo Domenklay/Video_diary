@@ -169,6 +169,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                 }
                 // Date-locked capsules are backed up with their private attachments.
                 TimeCapsuleRepository(context, uidKey).writeBackup(zip)
+                DiaryProfileRepository(context, uidKey).addToBackup(zip)
                 // Local journal: daily questions and moods, stored next to media index.
                 val reflections = File(root, "reflections.json")
                 if (reflections.exists()) {
@@ -215,6 +216,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             var universeJson: String? = null
             var journalJson: String? = null
             var albumCoversJson: String? = null
+            var profileJson: String? = null
             var capsuleJson: String? = null
             val seenZipPaths = mutableSetOf<String>()
             var totalMediaSize = 0L
@@ -232,6 +234,9 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                             } else if (entry.name == "universe/state.json") {
                                 universeJson = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
                                 JSONObject(universeJson!!) // reject invalid JSON before changing local index
+                            } else if (entry.name == "profile/about_me.json") {
+                                profileJson = zip.readBytesLimited(32_000).toString(Charsets.UTF_8)
+                                DiaryProfile.fromJson(profileJson!!)
                             } else if (entry.name == "album_covers.json") {
                                 albumCoversJson = zip.readBytesLimited(100_000).toString(Charsets.UTF_8)
                                 val covers = JSONObject(albumCoversJson!!)
@@ -293,6 +298,12 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             val universeTarget = File(context.filesDir, "universe_backup/restore.json")
             val oldUniverse = if (universeJson != null && universeTarget.exists()) universeTarget.readBytes() else null
             val oldCovers = if (albumCoversJson != null && albumCovers.exists()) albumCovers.readBytes() else null
+            val profileRepo = DiaryProfileRepository(context, uidKey)
+            val profileFile = profileRepo.file
+            // Import only when there is no questionnaire (never overwrite personal answers).
+            val shouldImportProfile = profileJson != null &&
+                !profileFile.exists() && !File(profileFile.absolutePath + ".bak").exists()
+            var changedProfile = false
             var changedJournal = false
             var changedUniverse = false
             var changedCovers = false
@@ -389,6 +400,10 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     changedCapsules = true
                     capsuleRepo.save(currentCapsules + addCapsules)
                 }
+                if (shouldImportProfile) {
+                    changedProfile = true
+                    profileRepo.save(DiaryProfile.fromJson(profileJson!!))
+                }
                 // Publish the media catalog only after auxiliary data has been written.
                 store(current + accepted)
             } catch (t: Throwable) {
@@ -401,6 +416,10 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                 }
                 if (changedCovers) {
                     if (oldCovers == null) albumCovers.delete() else writeAtomic(albumCovers, oldCovers)
+                }
+                if (changedProfile) {
+                    profileFile.delete()
+                    File(profileFile.absolutePath + ".bak").delete()
                 }
                 if (changedCapsules) {
                     if (oldCapsules == null) capsuleRepo.index.delete()
