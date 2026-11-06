@@ -169,8 +169,8 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
                         val uploaded = GoogleCloudDrive(token).upload(temp)
                         val afterUpload = GoogleCloudFiles.fingerprint(context)
                         Triple(uploaded,
-                            if (before == afterExport && before == afterUpload) before else "",
-                            before == afterExport && before == afterUpload)
+                            if (CloudSnapshotFingerprint.unchangedDuringUpload(before, afterExport, afterUpload)) before else "",
+                            CloudSnapshotFingerprint.unchangedDuringUpload(before, afterExport, afterUpload))
                     } finally { temp.delete() }
                 }
                 val savedAt = System.currentTimeMillis()
