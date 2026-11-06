@@ -29,9 +29,10 @@ class LocalMediaRepository(private val context: Context, uid: String) {
     private val index = File(root, "index.json")
 
     @Synchronized fun list(): List<LocalMoment> {
-        if (!index.exists()) return emptyList()
+        if (!index.exists() && !File(index.absolutePath + ".bak").exists()) return emptyList()
         return runCatching {
-            val array = JSONArray(index.readText(Charsets.UTF_8))
+            val text = AtomicFile(index).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val array = JSONArray(text)
             (0 until array.length()).map { i ->
                 val item = array.getJSONObject(i)
                 LocalMoment(item.getString("id"), item.getString("album"), item.getString("title"),
@@ -277,6 +278,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     val currentUniverse = File(universeDir, "snapshot.json")
                     if (currentUniverse.exists()) currentUniverse.copyTo(File(universeDir, "before_import.json"), overwrite = true)
                     val pending = File(universeDir, "restore.pending")
+                    changedUniverse = true
                     pending.writeText(json, Charsets.UTF_8)
                     if (!pending.renameTo(File(universeDir, "restore.json"))) {
                         pending.copyTo(File(universeDir, "restore.json"), overwrite = true)
