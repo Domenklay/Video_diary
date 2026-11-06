@@ -162,8 +162,9 @@ public final class UniverseActivity extends Activity {
             applyVisualPreferences();
             // Native questionnaire can change while this page stays cached.
             web.evaluateJavascript(
-                "if(typeof syncSharedIdentity==='function'){" +
-                    "syncSharedIdentity();if(typeof render==='function')render();}", null);
+                "if(typeof syncSharedIdentity==='function'&&typeof state!=='undefined'){" +
+                    "var before=JSON.stringify(state.profile);syncSharedIdentity();" +
+                    "if(before!==JSON.stringify(state.profile)&&typeof render==='function')render();}", null);
         }
     }
 
