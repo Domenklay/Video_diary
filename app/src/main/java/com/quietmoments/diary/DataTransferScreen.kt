@@ -25,6 +25,7 @@ import java.time.LocalDate
 fun DataTransferScreen(
     onFinished: () -> Unit,
     onAppearanceRestored: (String, Boolean) -> Unit = { _, _ -> },
+    onOpenGoogleDrive: () -> Unit = {},
     uid: String = "offline"
 ) {
     val context = LocalContext.current
@@ -210,6 +211,21 @@ fun DataTransferScreen(
                     Text("Перенести данные")
                 }
             }
+        }
+        DiarySectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CloudUpload, contentDescription = null,
+                    tint = palette.primary, modifier = Modifier.size(26.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Google Диск", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold)
+            }
+            Text("Можно хранить архив на Google Диске. Выбор облачной папки " +
+                "происходит через системное окно Android.")
+            OutlinedButton(
+                onClick = onOpenGoogleDrive, enabled = !busy,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Открыть Google Диск") }
         }
         DiarySectionCard {
             Text("Резервная копия этой версии", style = MaterialTheme.typography.titleMedium,
