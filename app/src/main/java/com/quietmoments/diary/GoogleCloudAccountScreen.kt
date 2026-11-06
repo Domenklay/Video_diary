@@ -45,7 +45,8 @@ internal object CloudConsent {
 
 @Composable
 fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
-    onAppearanceRestored: (String, Boolean) -> Unit = { _, _ -> }) {
+    onAppearanceRestored: (String, Boolean) -> Unit = { _, _ -> },
+    onOpenManualDrive: () -> Unit = {}) {
     val context = LocalContext.current
     val palette = LocalDiaryPalette.current
     val client = remember(context) { Identity.getAuthorizationClient(context) }
@@ -119,12 +120,17 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
                 authReady(client.getAuthorizationResultFromIntent(intent))
             }
         } catch (t: Throwable) {
-            error = t.localizedMessage ?: "Google отказал в авторизации"
+            error = GooglePlayAuthorizationSupport.loginFailure(t)
             busy = false
         }
     }
     fun authorize(switch: Boolean = false) {
         if (busy) return
+        val serviceProblem = GooglePlayAuthorizationSupport.availabilityIssue(context)
+        if (serviceProblem != null) {
+            error = serviceProblem
+            return
+        }
         busy = true
         error = ""
         client.authorize(CloudConsent.request(switch))
@@ -135,13 +141,12 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
                         authLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
                     } else authReady(auth)
                 } catch (t: Throwable) {
-                    error = t.localizedMessage ?: "Ошибка входа через Google"
+                    error = GooglePlayAuthorizationSupport.loginFailure(t)
                     busy = false
                 }
             }
             .addOnFailureListener {
-                error = "Ошибка Google. Проверь Google Play, интернет и OAuth: " +
-                    (it.localizedMessage ?: "неизвестная ошибка")
+                error = GooglePlayAuthorizationSupport.loginFailure(it)
                 busy = false
             }
     }
@@ -319,6 +324,17 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
                         Text("Сохранить воспоминания в Google")
                     }
                 }
+                HorizontalDivider()
+                Text("Ручное резервное копирование",
+                    style = MaterialTheme.typography.titleMedium)
+                Text("Работает без службы Google Identity. Можно сохранить архив " +
+                    "на устройство или выбрать Google Диск в системном окне Android.")
+                OutlinedButton(onClick = onOpenManualDrive, enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.FolderOpen, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Сохранить или восстановить ZIP вручную")
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = autoEnabled, enabled = email.isNotBlank() && !busy,
                         onCheckedChange = {
@@ -420,7 +436,14 @@ fun GoogleCloudAccountScreen(onBack: () -> Unit, uid: String = "offline",
         if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         if (status.isNotBlank()) item { Text(status) }
         if (error.isNotBlank()) item {
-            Text(error, color = MaterialTheme.colorScheme.error)
+            DiarySectionCard {
+                Text("Не удалось выполнить операцию Google",
+                    style = MaterialTheme.typography.titleMedium)
+                Text(error, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = onOpenManualDrive, enabled = !busy) {
+                    Text("Открыть ручное резервное копирование")
+                }
+            }
         }
         item {
             DiarySectionCard {

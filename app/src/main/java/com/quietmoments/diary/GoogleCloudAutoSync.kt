@@ -16,6 +16,11 @@ object GoogleCloudAutoSync {
         if (!prefs.getBoolean("auto", false)) return@withContext
         val expected = prefs.getString("subject", "").orEmpty()
         if (expected.isEmpty()) return@withContext
+        val serviceIssue = GooglePlayAuthorizationSupport.availabilityIssue(context)
+        if (serviceIssue != null) {
+            prefs.edit().putString("auto_status", serviceIssue).apply()
+            return@withContext
+        }
         val fingerprint = GoogleCloudFiles.fingerprint(context)
         if (fingerprint == prefs.getString("fingerprint", "")) return@withContext
         val now = System.currentTimeMillis()
