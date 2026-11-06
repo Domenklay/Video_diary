@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v1.8.5-bottom-navigation-fix]
+    branches: [main, v2.0-data-migration-release]
   workflow_dispatch:
 
 permissions:
@@ -56,13 +56,34 @@ jobs:
             chmod 600 "$RUNNER_TEMP/quietmoments-release.jks"
             echo "QM_KEYSTORE_PATH=$RUNNER_TEMP/quietmoments-release.jks" >> "$GITHUB_ENV"
           fi
-      - name: Build stable release APK when configured
-        if: env.QM_KEYSTORE_PATH != ''
+      - name: Build release APK (unsigned until owner signing key is configured)
         env:
           QM_KEYSTORE_PASSWORD: ${{ secrets.QM_KEYSTORE_PASSWORD }}
           QM_KEY_ALIAS: ${{ secrets.QM_KEY_ALIAS }}
           QM_KEY_PASSWORD: ${{ secrets.QM_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
+      - name: Upload unsigned release for owner signing
+        if: env.QM_KEYSTORE_PATH == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuietMoments-Universe-unsigned-release
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Prepare local signing utilities
+        if: env.QM_KEYSTORE_PATH == ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/qm-signing-tools"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" "$RUNNER_TEMP/qm-signing-tools/"
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" "$RUNNER_TEMP/qm-signing-tools/"
+      - name: Upload local signing utilities
+        if: env.QM_KEYSTORE_PATH == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuietMoments-local-signing-tools
+          path: ${{ runner.temp }}/qm-signing-tools/*
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload stable release APK
         if: env.QM_KEYSTORE_PATH != ''
         uses: actions/upload-artifact@v4
