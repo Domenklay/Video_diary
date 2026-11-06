@@ -3,15 +3,29 @@ package com.quietmoments.diary
 import android.content.Context
 import android.util.AtomicFile
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -30,14 +44,17 @@ data class DiaryProfile(
     val diaryWish: String = "",
     val futureSelf: String = "",
     val favoriteMood: String = "Спокойно",
-    val questionTheme: String = "Разные темы"
+    val questionTheme: String = "Разные темы",
+    val birth: String = "",
+    val sign: Int = 6
 ) {
     val hasContent get() = nickname.isNotBlank() || about.isNotBlank() ||
         preciousThings.isNotBlank() || happiestMemory.isNotBlank() ||
         diaryWish.isNotBlank() || futureSelf.isNotBlank()
 
     companion object {
-        val moods = listOf("Радость", "Спокойно", "Вдохновение", "Нежность", "Мечтательно")
+        val moods = listOf("Радость", "Спокойно", "Грусть", "Тревога", "Вдохновение", "Нежность", "Мечтательно")
+        val signs = listOf("Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы")
         val themes = listOf("Разные темы", "Семья и близкие", "Мечты", "Благодарность", "Воспоминания")
         fun fromJson(text: String): DiaryProfile {
             require(text.toByteArray(Charsets.UTF_8).size <= 32_000) { "Анкета слишком большая" }
@@ -50,8 +67,11 @@ data class DiaryProfile(
                 diaryWish = data.optString("diaryWish", "").take(600),
                 futureSelf = data.optString("futureSelf", "").take(600),
                 favoriteMood = data.optString("favoriteMood", "Спокойно"),
-                questionTheme = data.optString("questionTheme", "Разные темы")
+                questionTheme = data.optString("questionTheme", "Разные темы"),
+                birth = data.optString("birth", ""),
+                sign = data.optInt("sign", 6)
             )
+            require((profile.birth.isBlank() || runCatching { LocalDate.parse(profile.birth) }.isSuccess) && profile.sign in 0..11) { "Неверная дата рождения или знак" }
             require(profile.favoriteMood in moods && profile.questionTheme in themes) {
                 "Некорректные варианты анкеты"
             }
@@ -66,6 +86,8 @@ data class DiaryProfile(
             put("futureSelf", profile.futureSelf.take(600))
             put("favoriteMood", profile.favoriteMood)
             put("questionTheme", profile.questionTheme)
+            put("birth", profile.birth)
+            put("sign", profile.sign)
         }.toString()
     }
 }
@@ -74,6 +96,24 @@ class DiaryProfileRepository(context: Context, uid: String = "offline") {
     private val root = File(context.filesDir, "local_moments/" +
         uid.replace(Regex("[^A-Za-z0-9_-]"), "_")).apply { mkdirs() }
     val file = File(root, "profile.json")
+    private val draft = File(root, "profile_draft.json")
+    @Synchronized fun readDraft(): DiaryProfile? {
+        if (!draft.exists() && !File(draft.absolutePath + ".bak").exists()) return null
+        val text = AtomicFile(draft).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
+        return DiaryProfile.fromJson(text)
+    }
+    @Synchronized fun saveDraft(profile: DiaryProfile) {
+        val bytes = DiaryProfile.toJson(profile).toByteArray(Charsets.UTF_8)
+        require(bytes.size <= 32_000)
+        val atomic = AtomicFile(draft)
+        val stream = atomic.startWrite()
+        try { stream.write(bytes); atomic.finishWrite(stream) }
+        catch (e: Throwable) { atomic.failWrite(stream); throw e }
+    }
+    @Synchronized fun clearDraft() {
+        draft.delete()
+        File(draft.absolutePath + ".bak").delete()
+    }
     @Synchronized fun read(): DiaryProfile {
         if (!file.exists() && !File(file.absolutePath + ".bak").exists()) return DiaryProfile()
         val text = AtomicFile(file).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -81,6 +121,7 @@ class DiaryProfileRepository(context: Context, uid: String = "offline") {
     }
     @Synchronized fun save(profile: DiaryProfile) {
         require(profile.favoriteMood in DiaryProfile.moods && profile.questionTheme in DiaryProfile.themes)
+        require(profile.sign in 0..11 && (profile.birth.isBlank() || runCatching { LocalDate.parse(profile.birth) }.isSuccess))
         val bytes = DiaryProfile.toJson(profile).toByteArray(Charsets.UTF_8)
         require(bytes.size <= 32_000)
         val atomic = AtomicFile(file)
