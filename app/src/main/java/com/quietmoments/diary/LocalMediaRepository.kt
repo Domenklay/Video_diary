@@ -27,6 +27,25 @@ class LocalMediaRepository(private val context: Context, uid: String) {
     private val root = File(context.filesDir, "local_moments/$uidKey").apply { mkdirs() }
     private val media = File(root, "media").apply { mkdirs() }
     private val index = File(root, "index.json")
+    private val albumCovers = File(root, "album_covers.json")
+
+    /** Album art is metadata, not a copy or mutation of the user's photos. */
+    @Synchronized fun albumCoverStyle(album: String, defaultStyle: String): String {
+        if (!albumCovers.exists() && !File(albumCovers.absolutePath + ".bak").exists()) return defaultStyle
+        val json = JSONObject(AtomicFile(albumCovers).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() })
+        val style = json.optString(album, defaultStyle)
+        return if (DiaryThemes.all.any { it.id == style }) style else defaultStyle
+    }
+
+    @Synchronized fun setAlbumCoverStyle(album: String, style: String) {
+        require(album.isNotBlank() && album.length <= 120)
+        require(DiaryThemes.all.any { it.id == style }) { "Неизвестный стиль обложки" }
+        val json = if (albumCovers.exists() || File(albumCovers.absolutePath + ".bak").exists())
+            JSONObject(AtomicFile(albumCovers).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() })
+        else JSONObject()
+        json.put(album, style)
+        writeAtomic(albumCovers, json.toString().toByteArray(Charsets.UTF_8))
+    }
 
     @Synchronized fun list(): List<LocalMoment> {
         if (!index.exists() && !File(index.absolutePath + ".bak").exists()) return emptyList()
@@ -159,6 +178,15 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     universe.inputStream().use { it.copyTo(zip) }
                     zip.closeEntry()
                 }
+                // Optional visual personalization; older backups without this entry still work.
+                if (albumCovers.exists() || File(albumCovers.absolutePath + ".bak").exists()) {
+                    val bytes = AtomicFile(albumCovers).openRead().use { it.readBytes() }
+                    require(bytes.size <= 100_000) { "Слишком много обложек" }
+                    JSONObject(bytes.toString(Charsets.UTF_8))
+                    zip.putNextEntry(ZipEntry("album_covers.json"))
+                    zip.write(bytes)
+                    zip.closeEntry()
+                }
                 zip.putNextEntry(ZipEntry("backup-version.txt"))
                 zip.write("quietmoments-v1.2-local\n".toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
@@ -179,6 +207,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             var metadata: String? = null
             var universeJson: String? = null
             var journalJson: String? = null
+            var albumCoversJson: String? = null
             val seenZipPaths = mutableSetOf<String>()
             var totalMediaSize = 0L
             context.contentResolver.openInputStream(uri).use { stream ->
@@ -195,6 +224,16 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                             } else if (entry.name == "universe/state.json") {
                                 universeJson = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
                                 JSONObject(universeJson!!) // reject invalid JSON before changing local index
+                            } else if (entry.name == "album_covers.json") {
+                                albumCoversJson = zip.readBytesLimited(100_000).toString(Charsets.UTF_8)
+                                val covers = JSONObject(albumCoversJson!!)
+                                require(covers.length() <= 2000) { "Слишком много обложек" }
+                                val keys = covers.keys()
+                                while (keys.hasNext()) {
+                                    val name = keys.next()
+                                    require(name.isNotBlank() && name.length <= 120)
+                                    require(DiaryThemes.all.any { it.id == covers.getString(name) })
+                                }
                             } else if (entry.name == "moments.json") {
                                 metadata = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
                             } else if (entry.name.matches(Regex("media/[A-Za-z0-9_-]+\\.(mp4|img)"))) {
@@ -229,8 +268,10 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             val oldJournal = if (journalJson != null && journalTarget.exists()) journalTarget.readBytes() else null
             val universeTarget = File(context.filesDir, "universe_backup/restore.json")
             val oldUniverse = if (universeJson != null && universeTarget.exists()) universeTarget.readBytes() else null
+            val oldCovers = if (albumCoversJson != null && albumCovers.exists()) albumCovers.readBytes() else null
             var changedJournal = false
             var changedUniverse = false
+            var changedCovers = false
             val accepted = mutableListOf<LocalMoment>()
             val moved = mutableListOf<File>()
             try {
@@ -286,7 +327,22 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     }
                     changedUniverse = true
                 }
-                // Publish the media catalog only after optional journal and Universe writes succeed.
+                albumCoversJson?.let { data ->
+                    // Existing album choices win; imported choices fill missing names.
+                    val existingCovers = if (albumCovers.exists())
+                        JSONObject(albumCovers.readText(Charsets.UTF_8)) else JSONObject()
+                    val importedCovers = JSONObject(data)
+                    val keys = importedCovers.keys()
+                    while (keys.hasNext()) {
+                        val name = keys.next()
+                        if (!existingCovers.has(name)) {
+                            existingCovers.put(name, importedCovers.getString(name))
+                        }
+                    }
+                    writeAtomic(albumCovers, existingCovers.toString().toByteArray(Charsets.UTF_8))
+                    changedCovers = true
+                }
+                // Publish the media catalog only after auxiliary data has been written.
                 store(current + accepted)
             } catch (t: Throwable) {
                 // Restore old auxiliary files before removing newly copied media.
@@ -295,6 +351,9 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                 }
                 if (changedUniverse) {
                     if (oldUniverse == null) universeTarget.delete() else writeAtomic(universeTarget, oldUniverse)
+                }
+                if (changedCovers) {
+                    if (oldCovers == null) albumCovers.delete() else writeAtomic(albumCovers, oldCovers)
                 }
                 moved.forEach { it.delete() }
                 throw t
