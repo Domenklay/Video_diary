@@ -146,6 +146,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     var cloudBackTab by rememberSaveable { mutableStateOf("home") }
 
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    var journalOpenRequest by rememberSaveable { mutableIntStateOf(0) }
     val tabStateHolder = rememberSaveableStateHolder()
 
     fun openUniverse() {
@@ -243,6 +244,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                 when (currentTab) {
                     "diary" -> LocalMomentsScreen(
                         uid = "offline", pinLock = lock, initialDate = chosenDate,
+                        openJournalRequest = journalOpenRequest,
                         onClose = { currentTab = "home" },
                         onOpenMoods = { currentTab = "moods" },
                         onOpenTransfer = { currentTab = "transfer" }
@@ -266,6 +268,19 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             onMotionChange(enabled)
                         }
                     )
+                    "cloudHub" -> CloudHubScreen(
+                        onBack = { currentTab = "settings" },
+                        onGoogle = {
+                            cloudBackTab = "cloudHub"
+                            currentTab = "cloud"
+                        },
+                        onYandex = { currentTab = "yandex" },
+                        onManual = {
+                            driveBackTab = "cloudHub"
+                            currentTab = "drive"
+                        },
+                        onTransfer = { currentTab = "transfer" }
+                    )
                     "cloud" -> GoogleCloudAccountScreen(
                         onBack = {
                             cloudWelcome.edit().putBoolean("google_welcome_seen", true).apply()
@@ -281,7 +296,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         }
                     )
                     "yandex" -> YandexCloudAccountScreen(
-                        onBack = { currentTab = "settings" },
+                        onBack = { currentTab = "cloudHub" },
                         onAppearanceRestored = { id, enabled ->
                             onSelectTheme(id)
                             onMotionChange(enabled)
@@ -306,20 +321,17 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                     "settings" -> DiarySettingsPage(lock,
                         onOpenDiary = { currentTab = "diary" },
                         onOpenTransfer = { currentTab = "transfer" },
-                        onOpenGoogleDrive = {
-                            driveBackTab = "settings"
-                            currentTab = "drive"
-                        },
-                        onOpenGoogleAccount = {
-                            cloudBackTab = "settings"
-                            currentTab = "cloud"
-                        },
-                        onOpenYandexDisk = { currentTab = "yandex" },
+                        onOpenCloudHub = { currentTab = "cloudHub" },
                         onOpenProfile = { profileBackTab = "settings"; currentTab = "profile" },
                         themeId = themeId, onSelectTheme = onSelectTheme,
                         motionEnabled = motionEnabled, onMotionChange = onMotionChange)
                     else -> DiaryHomePage(
                         onOpenDiary = { currentTab = "diary" },
+                        onOpenQuestion = {
+                            chosenDate = LocalDate.now().toString()
+                            journalOpenRequest++
+                            currentTab = "diary"
+                        },
                         onOpenUniverse = { openUniverse() },
                         onOpenSettings = { currentTab = "settings" },
                         onOpenProfile = { profileBackTab = "home"; currentTab = "profile" },
@@ -344,6 +356,7 @@ private data class DiaryCounts(val media: Int, val days: Int, val newest: String
 @Composable
 private fun DiaryHomePage(
     onOpenDiary: () -> Unit,
+    onOpenQuestion: () -> Unit,
     onOpenUniverse: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenProfile: () -> Unit,
@@ -537,7 +550,7 @@ private fun DiaryHomePage(
             }
             Text(LocalJournal.questionFor(LocalDate.now(), profile.questionTheme),
                 style = MaterialTheme.typography.bodyLarge)
-            TextButton(onClick = onOpenDiary) {
+            TextButton(onClick = onOpenQuestion) {
                 Text("Ответить в дневнике")
                 Icon(Icons.Default.ChevronRight, contentDescription = null)
             }
@@ -596,12 +609,12 @@ private fun DashboardTile(
 
 @Composable
 private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
-    onOpenTransfer: () -> Unit, onOpenGoogleDrive: () -> Unit,
-    onOpenGoogleAccount: () -> Unit, onOpenYandexDisk: () -> Unit,
+    onOpenTransfer: () -> Unit, onOpenCloudHub: () -> Unit,
     onOpenProfile: () -> Unit,
     themeId: String, onSelectTheme: (String) -> Unit,
     motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
     val palette = LocalDiaryPalette.current
+    var themesExpanded by rememberSaveable { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
@@ -624,7 +637,16 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
                 Text("Открыть мою анкету")
             }
         }
-        ThemeGallery(selectedId = themeId, onSelect = onSelectTheme)
+        DiarySectionCard {
+            Text("Оформление", style = MaterialTheme.typography.titleMedium)
+            Text("Выбрана тема: " + DiaryThemes.byId(themeId).name,
+                style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { themesExpanded = !themesExpanded },
+                modifier = Modifier.fillMaxWidth()) {
+                Text(if (themesExpanded) "Скрыть коллекцию тем" else "Выбрать из 12 тем")
+            }
+        }
+        if (themesExpanded) ThemeGallery(selectedId = themeId, onSelect = onSelectTheme)
         DiarySectionCard {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -653,72 +675,21 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         }
         DiarySectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = palette.primary)
-                Spacer(Modifier.width(10.dp))
-                Text("Мой Google аккаунт", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold)
-            }
-            Text("Войти через Google, сохранять копии в личном облаке " +
-                "и восстанавливать их на другом устройстве.")
-            Button(onClick = onOpenGoogleAccount, modifier = Modifier.fillMaxWidth()) {
-                Text("Войти и подключить синхронизацию")
-            }
-            Text("Автоматическое сохранение включается отдельно с твоего согласия.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        DiarySectionCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CloudUpload, contentDescription = null, tint = palette.primary)
-                Spacer(Modifier.width(10.dp))
-                Text("Google Диск", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold)
-            }
-            Text("Храни проверенные ZIP-копии в своём Google Диске и восстанавливай их на другом устройстве.",
-                style = MaterialTheme.typography.bodyMedium)
-            Button(onClick = onOpenGoogleDrive,
-                modifier = Modifier.fillMaxWidth()) {
-                Text("Облачное хранилище Google")
-            }
-            Text("Ручное копирование через системный выбор файлов. Автоматической синхронизации пока нет.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        DiarySectionCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Cloud, contentDescription = null, tint = palette.primary)
                 Spacer(Modifier.width(10.dp))
-                Text("Яндекс Диск", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold)
+                Text("Облако и резервные копии",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-            Text("Отдельные резервные копии через Яндекс ID. " +
-                "Доступ только к папке QuietMoments, без доступа к другим файлам.")
-            Button(onClick = onOpenYandexDisk, modifier = Modifier.fillMaxWidth()) {
-                Text("Подключить Яндекс Диск")
+            Text("Google и Яндекс Диск, дата последнего сохранения, " +
+                "резервные ZIP-копии и перенос данных.")
+            Button(onClick = onOpenCloudHub, modifier = Modifier.fillMaxWidth()) {
+                Text("Управлять резервными копиями")
             }
-            Text("Ручное сохранение, просмотр и восстановление ZIP-копий.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        DiarySectionCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CloudDownload, contentDescription = null, tint = palette.primary)
-                Spacer(Modifier.width(10.dp))
-                Text("Резервные копии", style = MaterialTheme.typography.titleMedium)
-            }
-            Text("Проверка архивов, резервное копирование и перенос из предыдущих версий.",
-                style = MaterialTheme.typography.bodyMedium)
-            Button(onClick = onOpenTransfer, shape = RoundedCornerShape(15.dp)) {
-                Text("Открыть перенос данных")
-            }
-            Text("Новая стабильная установка не может читать файлы старых preview-приложений напрямую.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall)
         }
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v2.6 · Google и Яндекс Диск", style = MaterialTheme.typography.bodySmall)
+            Text("v2.7 · удобный дневник и облако", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

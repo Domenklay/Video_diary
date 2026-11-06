@@ -22,6 +22,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +41,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     initialDate: String = LocalDate.now().toString(),
+    openJournalRequest: Int = 0,
     onOpenMoods: () -> Unit = {}, onOpenTransfer: () -> Unit = {}) {
     val context = LocalContext.current
     val palette = LocalDiaryPalette.current
@@ -52,6 +56,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     var mood by rememberSaveable { mutableStateOf(profile.favoriteMood) }
     var moodReason by rememberSaveable { mutableStateOf("") }
     var journalOpen by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     var captureFile by remember { mutableStateOf<File?>(null) }
     var captureUri by remember { mutableStateOf<Uri?>(null) }
     val scope = rememberCoroutineScope()
@@ -95,6 +100,10 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                 loadedForDate = initialDate
             }
         }.onFailure { error = it.localizedMessage ?: "Не удалось открыть локальный каталог" }
+    }
+
+    LaunchedEffect(openJournalRequest) {
+        if (openJournalRequest > 0) journalOpen = true
     }
 
     fun runTask(block: suspend () -> String) {
@@ -233,7 +242,8 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     val albums = listOf("Все") + liveMoments.map { it.album }.distinct().sorted()
     val shown = moments.filter {
         (it.deletedAt != 0L) == showTrash &&
-            (showTrash || selectedAlbum == "Все" || it.album == selectedAlbum)
+            (showTrash || selectedAlbum == "Все" || it.album == selectedAlbum) &&
+            MomentSearch.matches(it.title, it.album, it.note, it.memoryDate, searchQuery)
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -258,7 +268,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                 captureVideo.launch(captureUri!!)
             }) { Text("Записать видео") }
         }
-        Text("Все воспоминания хранятся только на твоём устройстве", style = MaterialTheme.typography.labelSmall,
+        Text("Оригиналы остаются на устройстве; копии можно сохранить в облако", style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (journalOpen) {
             IllustratedSectionHeader("Календарь воспоминаний", "Твои дни, настроение и маленькие истории", compact = true)
@@ -309,6 +319,22 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                 Text("Импорт и проверка")
             }
         }
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it.take(120) },
+            label = { Text("Поиск воспоминаний") },
+            placeholder = { Text("Название, альбом, дата или заметка") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                if (searchQuery.isNotBlank()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Очистить поиск")
+                    }
+                }
+            },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !showTrash, onClick = { showTrash = false; selectedAlbum = "Все" }, label = { Text("Альбомы") })
             FilterChip(selected = showTrash, onClick = { showTrash = true; selectedAlbum = "Все" }, label = { Text("Корзина") })
@@ -352,7 +378,12 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
             if (showTrash) "Удалённые воспоминания: ${shown.size}" else "Фото и видео: ${shown.size}",
             compact = true
         )
-        Text("Календарь: ${moments.count { it.deletedAt == 0L }} медиафайлов и ${entries.size} записей о настроении", style = MaterialTheme.typography.bodySmall)
+        Text(if (searchQuery.isBlank()) "Всего медиафайлов: ${moments.count { it.deletedAt == 0L }} · Записей дня: ${entries.size}"
+             else "Найдено: ${shown.size}", style = MaterialTheme.typography.bodySmall)
+        if (shown.isEmpty() && searchQuery.isNotBlank()) {
+            Text("По этому запросу ничего не найдено. Попробуй другое слово или очисти поиск.",
+                style = MaterialTheme.typography.bodySmall)
+        }
 
             }
         }
