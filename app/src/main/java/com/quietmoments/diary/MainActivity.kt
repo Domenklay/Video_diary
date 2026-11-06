@@ -669,7 +669,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v2.2 · Google аккаунт и облачные сохранения", style = MaterialTheme.typography.bodySmall)
+            Text("v2.3.1 · Google аккаунт, диагностика и резервные копии", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
