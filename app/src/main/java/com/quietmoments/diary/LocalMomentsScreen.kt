@@ -42,6 +42,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     val palette = LocalDiaryPalette.current
     val repo = remember(uid) { LocalMediaRepository(context, uid) }
     val journal = remember(uid) { LocalJournal(context, uid) }
+    val profile = remember(uid) { runCatching { DiaryProfileRepository(context, uid).read() }.getOrDefault(DiaryProfile()) }
     var entries by remember(uid) { mutableStateOf(emptyList<DailyReflection>()) }
     var day by rememberSaveable { mutableStateOf(initialDate) }
     var loadedForDate by rememberSaveable { mutableStateOf("") }
@@ -273,7 +274,9 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                     }
             }
             DiaryMonthCalendar(selectedDate, activeDates, onDate = { selectDate(it) })
-            Text(LocalJournal.questionFor(selectedDate))
+            val currentQuestion = entries.firstOrNull { it.date == day }?.question
+                ?: LocalJournal.questionFor(selectedDate, profile.questionTheme)
+            Text(currentQuestion)
             OutlinedTextField(answer, { answer = it }, label = { Text("Ответ") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf("Радость","Спокойно","Грусть","Тревога").forEach { item ->
@@ -284,7 +287,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                 label = { Text("Почему такое настроение?") },
                 modifier = Modifier.fillMaxWidth(), minLines = 2)
             Button(enabled = !busy, onClick = { runTask {
-                journal.save(DailyReflection(day, LocalJournal.questionFor(selectedDate),
+                journal.save(DailyReflection(day, currentQuestion,
                     answer, mood, moodReason))
                 "Ответ сохранён"
             }}) { Text("Сохранить день") }
