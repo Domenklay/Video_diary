@@ -19,7 +19,8 @@ import java.util.zip.ZipOutputStream
 data class LocalMoment(
     val id: String, val album: String, val title: String,
     val kind: String, val fileName: String, val createdAt: Long, val deletedAt: Long = 0,
-    val memoryDate: String = Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalDate().toString()
+    val memoryDate: String = Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalDate().toString(),
+    val note: String = "", val pageStyle: String = "moon"
 )
 
 class LocalMediaRepository(private val context: Context, uid: String) {
@@ -58,7 +59,8 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     item.getString("kind"), item.getString("fileName"), item.getLong("createdAt"), item.optLong("deletedAt", 0),
                     item.optString("memoryDate", "").ifBlank {
                         Instant.ofEpochMilli(item.getLong("createdAt")).atZone(ZoneId.systemDefault()).toLocalDate().toString()
-                    })
+                    },
+                    item.optString("note", "").take(10000), item.optString("pageStyle", "moon"))
             }
         }.getOrElse { throw IllegalStateException("Не удалось прочитать локальный каталог", it) }
     }
@@ -67,7 +69,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
         val array = JSONArray()
         items.forEach { m -> array.put(JSONObject().apply {
             put("id", m.id); put("album", m.album); put("title", m.title)
-            put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt); put("memoryDate", m.memoryDate)
+            put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt); put("memoryDate", m.memoryDate); put("note", m.note); put("pageStyle", m.pageStyle); put("note", m.note); put("pageStyle", m.pageStyle)
         }) }
         writeAtomic(index, array.toString().toByteArray(Charsets.UTF_8))
     }
@@ -109,11 +111,14 @@ class LocalMediaRepository(private val context: Context, uid: String) {
     }
 
     /** Edit only metadata; original media bytes and IDs remain unchanged. */
-    @Synchronized fun updateDetails(id: String, title: String, album: String, memoryDate: String) {
+    @Synchronized fun updateDetails(id: String, title: String, album: String, memoryDate: String,
+        note: String? = null, pageStyle: String? = null) {
+        require(pageStyle == null || DiaryThemes.all.any { it.id == pageStyle })
         LocalDate.parse(memoryDate)
         require(title.isNotBlank()) { "Название не может быть пустым" }
         store(list().map { item -> if (item.id == id && item.deletedAt == 0L)
-            item.copy(title = title.trim().take(180), album = album.trim().ifBlank { "Без альбома" }.take(120), memoryDate = memoryDate)
+            item.copy(title = title.trim().take(180), album = album.trim().ifBlank { "Без альбома" }.take(120), memoryDate = memoryDate,
+                note = note?.take(10000) ?: item.note, pageStyle = pageStyle ?: item.pageStyle)
             else item })
     }
 
@@ -162,6 +167,8 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     f.inputStream().use { it.copyTo(zip) }
                     zip.closeEntry()
                 }
+                // Date-locked capsules are backed up with their private attachments.
+                TimeCapsuleRepository(context, uidKey).writeBackup(zip)
                 // Local journal: daily questions and moods, stored next to media index.
                 val reflections = File(root, "reflections.json")
                 if (reflections.exists()) {
@@ -188,7 +195,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     zip.closeEntry()
                 }
                 zip.putNextEntry(ZipEntry("backup-version.txt"))
-                zip.write("quietmoments-v1.2-local\n".toByteArray(Charsets.UTF_8))
+                zip.write("quietmoments-v1.8-local\n".toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
                 zip.putNextEntry(ZipEntry("moments.json"))
                 zip.write(payload.toString().toByteArray(Charsets.UTF_8))
@@ -208,6 +215,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             var universeJson: String? = null
             var journalJson: String? = null
             var albumCoversJson: String? = null
+            var capsuleJson: String? = null
             val seenZipPaths = mutableSetOf<String>()
             var totalMediaSize = 0L
             context.contentResolver.openInputStream(uri).use { stream ->
@@ -234,6 +242,18 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                                     require(name.isNotBlank() && name.length <= 120)
                                     require(DiaryThemes.all.any { it.id == covers.getString(name) })
                                 }
+                            } else if (entry.name == "capsules/manifest.json") {
+                                capsuleJson = zip.readBytesLimited(TimeCapsuleRepository.MAX_INDEX_BYTES)
+                                    .toString(Charsets.UTF_8)
+                                TimeCapsuleRepository.decode(capsuleJson!!)
+                            } else if (entry.name.matches(Regex("capsules/media/[a-f0-9-]{36}\\.(mp4|img)"))) {
+                                val capsuleStage = File(staging, "capsules").apply { mkdirs() }
+                                val target = File(capsuleStage, entry.name.substringAfterLast('/'))
+                                target.outputStream().use { output ->
+                                    zip.copyToLimited(output, TimeCapsuleRepository.MAX_MEDIA_BYTES)
+                                }
+                                totalMediaSize += target.length()
+                                require(totalMediaSize <= 2L * 1024 * 1024 * 1024) { "Слишком большой архив" }
                             } else if (entry.name == "moments.json") {
                                 metadata = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
                             } else if (entry.name.matches(Regex("media/[A-Za-z0-9_-]+\\.(mp4|img)"))) {
@@ -247,6 +267,10 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     }
                 }
             }
+            val capsuleRepo = TimeCapsuleRepository(context, uidKey)
+            val incomingCapsules = capsuleJson?.let { json ->
+                capsuleRepo.stageImport(json, File(staging, "capsules"))
+            } ?: emptyList()
             val array = JSONArray(requireNotNull(metadata) { "В архиве нет moments.json" })
             require(array.length() <= 50000) { "Слишком много записей" }
             val current = list()
@@ -272,6 +296,11 @@ class LocalMediaRepository(private val context: Context, uid: String) {
             var changedJournal = false
             var changedUniverse = false
             var changedCovers = false
+            val oldCapsules = if (capsuleJson != null && (capsuleRepo.index.exists() ||
+                File(capsuleRepo.index.absolutePath + ".bak").exists()))
+                AtomicFile(capsuleRepo.index).openRead().use { it.readBytes() } else null
+            var changedCapsules = false
+            val movedCapsules = mutableListOf<File>()
             val accepted = mutableListOf<LocalMoment>()
             val moved = mutableListOf<File>()
             try {
@@ -297,7 +326,8 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                         item.optString("memoryDate", "").ifBlank {
                             Instant.ofEpochMilli(item.optLong("createdAt", System.currentTimeMillis()))
                                 .atZone(ZoneId.systemDefault()).toLocalDate().toString()
-                        })
+                        }, item.optString("note", "").take(10000),
+                        item.optString("pageStyle", "moon"))
                 }
                 // Journal merge: existing dates win; imported entries fill gaps only.
                 journalJson?.let { json ->
@@ -309,7 +339,8 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                         val date = record.getString("date")
                         if (date !in seen) { changedJournal = true; journal.save(DailyReflection(
                             date, record.optString("question").take(500),
-                            record.optString("answer").take(10000), record.optString("mood").take(50))) }
+                            record.optString("answer").take(10000), record.optString("mood").take(50),
+                            record.optString("reason").take(2000))) }
                     }
                 }
                 // Opt-in import restores Universe data on the next opening of its WebView.
@@ -342,6 +373,22 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                     writeAtomic(albumCovers, existingCovers.toString().toByteArray(Charsets.UTF_8))
                     changedCovers = true
                 }
+                if (capsuleJson != null) {
+                    val currentCapsules = capsuleRepo.all()
+                    val existingIds = currentCapsules.map { it.id }.toSet()
+                    val addCapsules = incomingCapsules.filterNot { it.id in existingIds }
+                    for (capsule in addCapsules) {
+                        if (capsule.attachment.isNotEmpty()) {
+                            val source = File(staging, "capsules/" + capsule.attachment)
+                            val destination = File(capsuleRepo.directory, capsule.attachment)
+                            require(!destination.exists()) { "Конфликт имени вложения капсулы" }
+                            source.copyTo(destination, overwrite = false)
+                            movedCapsules += destination
+                        }
+                    }
+                    changedCapsules = true
+                    capsuleRepo.save(currentCapsules + addCapsules)
+                }
                 // Publish the media catalog only after auxiliary data has been written.
                 store(current + accepted)
             } catch (t: Throwable) {
@@ -355,6 +402,11 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                 if (changedCovers) {
                     if (oldCovers == null) albumCovers.delete() else writeAtomic(albumCovers, oldCovers)
                 }
+                if (changedCapsules) {
+                    if (oldCapsules == null) capsuleRepo.index.delete()
+                    else writeAtomic(capsuleRepo.index, oldCapsules)
+                }
+                movedCapsules.forEach { it.delete() }
                 moved.forEach { it.delete() }
                 throw t
             }
