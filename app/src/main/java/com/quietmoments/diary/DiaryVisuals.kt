@@ -1,0 +1,67 @@
+package com.quietmoments.diary
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+
+private val Night = Color(0xFF231B33)
+private val Violet = Color(0xFF4F3A67)
+private val Gold = Color(0xFFE4C78F)
+
+/** Reusable high-contrast illustrated-feel surfaces, without network images. */
+@Composable
+fun UniverseBanner(onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    Card(onClick = onOpen, modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Night)) {
+        Box(Modifier.background(Brush.linearGradient(listOf(Night, Violet))).fillMaxWidth()) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(Icons.Default.AutoAwesome, null, tint = Gold,
+                        modifier = Modifier.size(28.dp))
+                    Text("МОЯ ВСЕЛЕННАЯ", color = Gold,
+                        style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                }
+                Text("Сохрани магию каждого дня", color = Color.White,
+                    style = MaterialTheme.typography.titleLarge)
+                Text("Гороскопы · Луна · Карты · Сны", color = Color(0xFFECE3F4),
+                    style = MaterialTheme.typography.bodyMedium)
+                Text("Открыть раздел  ›", color = Gold,
+                    style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+@Composable
+fun LocalDiaryHeading(title: String, subtitle: String, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(title, style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
+        Text(subtitle, style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+fun DiarySectionCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    ElevatedCard(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+    }
+}

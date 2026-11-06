@@ -1,0 +1,274 @@
+package com.quietmoments.diary
+
+import android.content.Context
+import android.net.Uri
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+
+/** Local-only media library, separate from existing Firebase documents. */
+data class LocalMoment(
+    val id: String, val album: String, val title: String,
+    val kind: String, val fileName: String, val createdAt: Long, val deletedAt: Long = 0
+)
+
+class LocalMediaRepository(private val context: Context, uid: String) {
+    private val uidKey = uid.replace(Regex("[^A-Za-z0-9_-]"), "_")
+    private val root = File(context.filesDir, "local_moments/$uidKey").apply { mkdirs() }
+    private val media = File(root, "media").apply { mkdirs() }
+    private val index = File(root, "index.json")
+
+    @Synchronized fun list(): List<LocalMoment> {
+        if (!index.exists()) return emptyList()
+        return runCatching {
+            val array = JSONArray(index.readText(Charsets.UTF_8))
+            (0 until array.length()).map { i ->
+                val item = array.getJSONObject(i)
+                LocalMoment(item.getString("id"), item.getString("album"), item.getString("title"),
+                    item.getString("kind"), item.getString("fileName"), item.getLong("createdAt"), item.optLong("deletedAt", 0))
+            }
+        }.getOrElse { throw IllegalStateException("Не удалось прочитать локальный каталог", it) }
+    }
+
+    @Synchronized private fun store(items: List<LocalMoment>) {
+        val array = JSONArray()
+        items.forEach { m -> array.put(JSONObject().apply {
+            put("id", m.id); put("album", m.album); put("title", m.title)
+            put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt)
+        }) }
+        val tmp = File(root, "index.pending")
+        tmp.writeText(array.toString(), Charsets.UTF_8)
+        if (!tmp.renameTo(index)) {
+            tmp.copyTo(index, overwrite = true)
+            tmp.delete()
+        }
+    }
+
+    @Synchronized fun add(uri: Uri, title: String, album: String, mime: String?): LocalMoment {
+        val kind = if (mime?.startsWith("video/") == true) "video" else "photo"
+        val id = UUID.randomUUID().toString()
+        val target = File(media, "$id.${if (kind == "video") "mp4" else "img"}")
+        try {
+            context.contentResolver.openInputStream(uri).use { input ->
+                requireNotNull(input) { "Не удалось открыть выбранный файл" }
+                FileOutputStream(target).use { output -> input.copyTo(output) }
+            }
+            val item = LocalMoment(id, album.trim().ifBlank { "Без альбома" }.take(120),
+                title.trim().ifBlank { "Воспоминание" }.take(180), kind,
+                target.name, System.currentTimeMillis())
+            store(list() + item)
+            return item
+        } catch (t: Throwable) {
+            target.delete()
+            throw t
+        }
+    }
+
+    fun contentUri(item: LocalMoment): Uri {
+        // Used with ACTION_VIEW and the app's FileProvider; never expose raw file paths.
+        val file = File(media, item.fileName)
+        require(file.canonicalFile.parentFile == media.canonicalFile)
+        return androidx.core.content.FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", file)
+    }
+
+    /** Edit only metadata; original media bytes and IDs remain unchanged. */
+    @Synchronized fun updateDetails(id: String, title: String, album: String) {
+        require(title.isNotBlank()) { "Название не может быть пустым" }
+        store(list().map { item -> if (item.id == id && item.deletedAt == 0L)
+            item.copy(title = title.trim().take(180), album = album.trim().ifBlank { "Без альбома" }.take(120))
+            else item })
+    }
+
+    /** Internal immutable media file for read-only thumbnail extraction. */
+    fun thumbnailFile(item: LocalMoment): File {
+        val file = File(media, item.fileName)
+        require(file.canonicalFile.parentFile == media.canonicalFile) { "Invalid media path" }
+        return file
+    }
+
+    @Synchronized fun renameAlbum(id: String, newAlbum: String) {
+        store(list().map { if (it.id == id) it.copy(album = newAlbum.trim().ifBlank { "Без альбома" }.take(120)) else it })
+    }
+
+    @Synchronized fun moveToTrash(id: String) {
+        store(list().map { if (it.id == id && it.deletedAt == 0L)
+            it.copy(deletedAt = System.currentTimeMillis()) else it })
+    }
+
+    @Synchronized fun restoreFromTrash(id: String) {
+        store(list().map { if (it.id == id) it.copy(deletedAt = 0L) else it })
+    }
+
+    @Synchronized fun deleteForever(id: String) {
+        val items = list()
+        val item = items.firstOrNull { it.id == id && it.deletedAt != 0L } ?: return
+        // Store the new index before deleting the file so a failed write cannot lose the reference.
+        store(items.filterNot { it.id == id })
+        File(media, item.fileName).delete()
+    }
+
+    @Synchronized fun exportBackup(uri: Uri) {
+        val items = list()
+        context.contentResolver.openOutputStream(uri, "w").use { stream ->
+            requireNotNull(stream) { "Не удалось создать файл резервной копии" }
+            ZipOutputStream(stream).use { zip ->
+                val payload = JSONArray()
+                items.forEach { m ->
+                    payload.put(JSONObject().apply {
+                        put("id", m.id); put("title", m.title); put("album", m.album)
+                        put("kind", m.kind); put("fileName", m.fileName); put("createdAt", m.createdAt); put("deletedAt", m.deletedAt)
+                    })
+                    val f = File(media, m.fileName)
+                    if (!f.isFile) error("Не найден локальный файл: ${m.title}")
+                    zip.putNextEntry(ZipEntry("media/${m.fileName}"))
+                    f.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+                // Local journal: daily questions and moods, stored next to media index.
+                val reflections = File(root, "reflections.json")
+                if (reflections.exists()) {
+                    JSONArray(reflections.readText(Charsets.UTF_8))
+                    zip.putNextEntry(ZipEntry("journal/reflections.json"))
+                    reflections.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+                // Mirror of the Universe WebView localStorage (latest persisted state).
+                val universe = File(context.filesDir, "universe_backup/snapshot.json")
+                if (universe.isFile && universe.length() in 1L..2_000_000L) {
+                    JSONObject(universe.readText(Charsets.UTF_8)) // fail closed on invalid state
+                    zip.putNextEntry(ZipEntry("universe/state.json"))
+                    universe.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+                zip.putNextEntry(ZipEntry("backup-version.txt"))
+                zip.write("quietmoments-v0.6-local\n".toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+                zip.putNextEntry(ZipEntry("moments.json"))
+                zip.write(payload.toString().toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+        }
+    }
+
+    /**
+     * Merge-only import. Existing entries and files are never overwritten.
+     * Failed or incomplete imports leave old data unchanged.
+     */
+    @Synchronized fun importBackup(uri: Uri): Int {
+        val staging = File(root, "restore_${UUID.randomUUID()}").apply { mkdirs() }
+        try {
+            var metadata: String? = null
+            var universeJson: String? = null
+            var journalJson: String? = null
+            context.contentResolver.openInputStream(uri).use { stream ->
+                requireNotNull(stream)
+                ZipInputStream(stream).use { zip ->
+                    while (true) {
+                        val entry = zip.nextEntry ?: break
+                        if (!entry.isDirectory) {
+                            if (entry.name == "journal/reflections.json") {
+                                journalJson = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
+                                val j = JSONArray(journalJson!!)
+                                require(j.length() <= 50000)
+                            } else if (entry.name == "universe/state.json") {
+                                universeJson = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
+                                JSONObject(universeJson!!) // reject invalid JSON before changing local index
+                            } else if (entry.name == "moments.json") {
+                                metadata = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
+                            } else if (entry.name.matches(Regex("media/[A-Za-z0-9_-]+\\.(mp4|img)"))) {
+                                val target = File(staging, entry.name.substringAfterLast('/'))
+                                target.outputStream().use { output -> zip.copyToLimited(output, 500L * 1024 * 1024) }
+                            }
+                        }
+                        zip.closeEntry()
+                    }
+                }
+            }
+            val array = JSONArray(requireNotNull(metadata) { "В архиве нет moments.json" })
+            require(array.length() <= 50000) { "Слишком много записей" }
+            val current = list()
+            val existing = current.map { it.id }.toMutableSet()
+            val accepted = mutableListOf<LocalMoment>()
+            val moved = mutableListOf<File>()
+            try {
+                for (i in 0 until array.length()) {
+                    val item = array.getJSONObject(i)
+                    val fileName = item.getString("fileName")
+                    require(fileName.matches(Regex("[A-Za-z0-9_-]+\\.(mp4|img)"))) { "Неверное имя файла" }
+                    val input = File(staging, fileName)
+                    require(input.isFile) { "В архиве отсутствует медиафайл" }
+                    val oldId = item.getString("id")
+                    if (oldId in existing) continue
+                    require(oldId.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "Неверный идентификатор" }
+                    val id = oldId
+                    existing += id
+                    val ext = fileName.substringAfterLast('.')
+                    val destination = File(media, "$id.$ext")
+                    input.copyTo(destination)
+                    moved += destination
+                    accepted += LocalMoment(id, item.optString("album", "Без альбома").take(120),
+                        item.optString("title", "Воспоминание").take(180),
+                        item.optString("kind", "photo"), destination.name,
+                        item.optLong("createdAt", System.currentTimeMillis()), item.optLong("deletedAt", 0))
+                }
+                store(current + accepted)
+                // Journal merge: existing dates win; imported entries fill gaps only.
+                journalJson?.let { json ->
+                    val journal = LocalJournal(context, uidKey)
+                    val seen = journal.all().map { it.date }.toSet()
+                    val imported = JSONArray(json)
+                    for (i in 0 until imported.length()) {
+                        val record = imported.getJSONObject(i)
+                        val date = record.getString("date")
+                        if (date !in seen) journal.save(DailyReflection(
+                            date, record.optString("question").take(500),
+                            record.optString("answer").take(10000), record.optString("mood").take(50)))
+                    }
+                }
+                // Opt-in import restores Universe data on the next opening of its WebView.
+                // Preserve current universe snapshot as a separate recovery file.
+                universeJson?.let { json ->
+                    val universeDir = File(context.filesDir, "universe_backup").apply { mkdirs() }
+                    val currentUniverse = File(universeDir, "snapshot.json")
+                    if (currentUniverse.exists()) currentUniverse.copyTo(File(universeDir, "before_import.json"), overwrite = true)
+                    val pending = File(universeDir, "restore.pending")
+                    pending.writeText(json, Charsets.UTF_8)
+                    if (!pending.renameTo(File(universeDir, "restore.json"))) {
+                        pending.copyTo(File(universeDir, "restore.json"), overwrite = true)
+                        pending.delete()
+                    }
+                }
+            } catch (t: Throwable) {
+                moved.forEach { it.delete() }
+                throw t
+            }
+            return accepted.size
+        } finally {
+            staging.deleteRecursively()
+        }
+    }
+
+    private fun ZipInputStream.readBytesLimited(limit: Int): ByteArray {
+        val buf = java.io.ByteArrayOutputStream()
+        copyToLimited(buf, limit.toLong())
+        return buf.toByteArray()
+    }
+
+    private fun ZipInputStream.copyToLimited(output: java.io.OutputStream, maxBytes: Long) {
+        val buffer = ByteArray(64 * 1024)
+        var count = 0L
+        while (true) {
+            val n = read(buffer)
+            if (n < 0) break
+            count += n
+            require(count <= maxBytes) { "Превышен допустимый размер файла" }
+            output.write(buffer, 0, n)
+        }
+    }
+}
