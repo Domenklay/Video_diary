@@ -36,7 +36,8 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, initialDate: String = LocalDate.now().toString()) {
+fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
+    initialDate: String = LocalDate.now().toString(), onOpenMoods: () -> Unit = {}) {
     val context = LocalContext.current
     val palette = LocalDiaryPalette.current
     val repo = remember(uid) { LocalMediaRepository(context, uid) }
@@ -47,6 +48,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
     var choosingDate by remember { mutableStateOf(false) }
     var answer by rememberSaveable { mutableStateOf("") }
     var mood by rememberSaveable { mutableStateOf("Спокойно") }
+    var moodReason by rememberSaveable { mutableStateOf("") }
     var journalOpen by rememberSaveable { mutableStateOf(false) }
     var captureFile by remember { mutableStateOf<File?>(null) }
     var captureUri by remember { mutableStateOf<Uri?>(null) }
@@ -60,6 +62,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
     var showTrash by rememberSaveable { mutableStateOf(false) }
     var deleteId by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<LocalMoment?>(null) }
+    var pageMoment by remember { mutableStateOf<LocalMoment?>(null) }
     var editingCover by remember { mutableStateOf<String?>(null) }
     var coverRevision by remember { mutableStateOf(0) }
     var editTitle by remember { mutableStateOf("") }
@@ -76,6 +79,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         val old = entries.find { it.date == day }
         answer = old?.answer ?: ""
         mood = old?.mood ?: "Спокойно"
+        moodReason = old?.reason ?: ""
     }
     LaunchedEffect(uid, initialDate) {
         runCatching {
@@ -156,6 +160,31 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
         }
     }
 
+    if (pageMoment != null) {
+        val moment = pageMoment!!
+        MemoryPageDialog(
+            repo = repo, moment = moment,
+            reflection = entries.firstOrNull { it.date == moment.memoryDate },
+            onDismiss = { pageMoment = null },
+            onSave = { name, albumName, dateValue, noteValue, styleValue ->
+                pageMoment = null
+                runTask {
+                    repo.updateDetails(moment.id, name, albumName,
+                        dateValue, noteValue, styleValue)
+                    "Страница воспоминания сохранена"
+                }
+            },
+            onOpenMedia = {
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(repo.contentUri(moment),
+                            if (moment.kind == "video") "video/mp4" else "image/*")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    })
+                }.onFailure { error = it.localizedMessage ?: "Не удалось открыть медиа" }
+            }
+        )
+    }
     if (editing != null) AlertDialog(
         onDismissRequest = { editing = null },
         title = { Text("Редактировать воспоминание") },
@@ -251,10 +280,15 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                     FilterChip(selected = mood == item, onClick = { mood = item }, label = { Text(item) })
                 }
             }
+            OutlinedTextField(moodReason, { moodReason = it },
+                label = { Text("Почему такое настроение?") },
+                modifier = Modifier.fillMaxWidth(), minLines = 2)
             Button(enabled = !busy, onClick = { runTask {
-                journal.save(DailyReflection(day, LocalJournal.questionFor(selectedDate), answer, mood))
+                journal.save(DailyReflection(day, LocalJournal.questionFor(selectedDate),
+                    answer, mood, moodReason))
                 "Ответ сохранён"
             }}) { Text("Сохранить день") }
+            TextButton(onClick = onOpenMoods) { Text("Календарь эмоций и статистика") }
             Text("Статистика настроения", style = MaterialTheme.typography.titleSmall)
             entries.groupingBy { it.mood }.eachCount().forEach { (label, count) -> Text("$label — $count") }
         }
@@ -324,14 +358,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                     colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
                     onClick = {
                     if (showTrash) return@ElevatedCard
-                    runCatching {
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(repo.contentUri(moment),
-                                if (moment.kind == "video") "video/mp4" else "image/*")
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(intent)
-                    }.onFailure { error = it.localizedMessage ?: "Не удалось открыть файл" }
+                    pageMoment = moment
                 }) {
                     Box(Modifier.fillMaxWidth()) {
                         IllustratedThemeBackground(
@@ -350,6 +377,9 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                                     style = MaterialTheme.typography.bodySmall)
                                 Text(moment.memoryDate,
                                     style = MaterialTheme.typography.labelSmall)
+                                if (!showTrash) Text("Открыть страницу воспоминания",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary)
                             }
                         }
                         if (showTrash) {
