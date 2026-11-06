@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v1.6-polished-ui]
+    branches: [main, v1.7-living-themes]
   workflow_dispatch:
 
 permissions:
