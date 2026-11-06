@@ -257,7 +257,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock, 
                                 Text(moment.title, style = MaterialTheme.typography.titleMedium)
                                 Text("${moment.album} · ${if (moment.kind == "video") "Видео" else "Фото"}",
                                     style = MaterialTheme.typography.bodySmall)
-                                Text(java.text.moment.memoryDate,
+                                Text(moment.memoryDate,
                                     style = MaterialTheme.typography.labelSmall)
                             }
                         }
