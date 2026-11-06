@@ -25,10 +25,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -39,7 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     initialDate: String = LocalDate.now().toString(),
@@ -263,7 +266,15 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
             "Мой видеодневник", "Фото, видео и дорогие сердцу дни", compact = true
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { journalOpen = !journalOpen }, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = { journalOpen = !journalOpen },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = palette.surface.copy(alpha = .96f),
+                    contentColor = palette.text
+                ),
+                border = BorderStroke(1.dp, palette.primary.copy(alpha = .6f))
+            ) {
                 Text(if (journalOpen) "Скрыть вопрос" else "Вопрос дня")
             }
             Button(enabled = !busy, modifier = Modifier.weight(1f), onClick = {
@@ -274,8 +285,14 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                 captureVideo.launch(captureUri!!)
             }) { Text("Записать видео") }
         }
-        Text("Оригиналы остаются на устройстве; копии можно сохранить в облако", style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "Оригиналы — на телефоне, резервные копии — по твоему выбору в облаке",
+            style = MaterialTheme.typography.labelSmall,
+            color = palette.text,
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                .background(palette.surface.copy(alpha = .9f))
+                .padding(horizontal = 10.dp, vertical = 7.dp)
+        )
         if (journalOpen && searchQuery.isBlank()) {
             val selectedDate = runCatching { LocalDate.parse(day) }.getOrDefault(LocalDate.now())
             val currentQuestion = entries.firstOrNull { it.date == day }?.question
@@ -294,17 +311,20 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                     onValueChange = { answer = it },
                     label = { Text("Мой ответ") },
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 3, maxLines = 8
+                    minLines = 2, maxLines = 8
                 )
                 Text("Как ты себя чувствуешь?", style = MaterialTheme.typography.bodyMedium,
                     color = palette.text)
-                Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     DiaryProfile.moods.forEach { item ->
                         FilterChip(
                             selected = mood == item,
                             onClick = { mood = item },
-                            label = { Text(item) },
+                            label = { Text(item, maxLines = 1) },
                             colors = FilterChipDefaults.filterChipColors(
                                 containerColor = palette.surface,
                                 labelColor = palette.text,
@@ -329,10 +349,20 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
                     Text("Календарь эмоций и статистика")
                 }
             }
-            TextButton(onClick = { calendarVisible = !calendarVisible },
-                modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = { calendarVisible = !calendarVisible },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = palette.surface.copy(alpha = .97f),
+                    contentColor = palette.text
+                ),
+                border = BorderStroke(1.dp, palette.primary.copy(alpha = .62f))
+            ) {
+                Icon(Icons.Default.CalendarMonth, contentDescription = null,
+                    modifier = Modifier.size(19.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(if (calendarVisible) "Скрыть календарь месяца"
-                     else "Показать календарь месяца")
+                    else "Показать календарь месяца")
             }
             if (calendarVisible) {
                 val activeDates = remember(entries, moments) {
@@ -346,10 +376,20 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
             }
         }
         if (searchQuery.isBlank()) {
-            OutlinedButton(onClick = { addMomentOpen = !addMomentOpen },
-                modifier = Modifier.fillMaxWidth()) {
-                Text(if (addMomentOpen) "Свернуть добавление воспоминания"
-                     else "Добавить фото или видео")
+            OutlinedButton(
+                onClick = { addMomentOpen = !addMomentOpen },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = palette.surface.copy(alpha = .97f),
+                    contentColor = palette.text
+                ),
+                border = BorderStroke(1.dp, palette.primary.copy(alpha = .62f))
+            ) {
+                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null,
+                    modifier = Modifier.size(19.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(if (addMomentOpen) "Свернуть добавление"
+                    else "Добавить фото или видео")
             }
             if (addMomentOpen) {
                 DiarySectionCard {
