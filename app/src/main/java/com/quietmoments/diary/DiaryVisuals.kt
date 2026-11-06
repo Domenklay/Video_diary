@@ -67,11 +67,18 @@ fun LocalDiaryHeading(title: String, subtitle: String, modifier: Modifier = Modi
 
 @Composable
 fun DiarySectionCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    ElevatedCard(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)) {
+    val palette = LocalDiaryPalette.current
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = palette.surface),
+        border = BorderStroke(1.4.dp,
+            (if (palette.dark) palette.accent else palette.primary).copy(
+                alpha = if (palette.dark) .48f else .38f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
         Box {
-            DecorativeFrame(LocalDiaryPalette.current, Modifier.matchParentSize(), subtle = true)
+            DecorativeFrame(palette, Modifier.matchParentSize(), subtle = true)
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
                 content = content)
         }
@@ -98,7 +105,7 @@ fun IllustratedSectionHeader(
         Box(
             Modifier.matchParentSize().background(
                 Brush.horizontalGradient(listOf(
-                    Color(0xEE181323), Color(0xA8241A32), Color(0x27181225)))
+                    Color(0xF0181323), Color(0xD6241A32), Color(0x6A181225)))
             )
         )
         DecorativeFrame(palette, Modifier.matchParentSize())
