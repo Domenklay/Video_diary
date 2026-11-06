@@ -5,3 +5,11 @@ build/
 **/build/
 *.iml
 app/google-services.json
+
+# Android signing keys and passwords must never be committed
+*.jks
+*.keystore
+*.p12
+*.pfx
+*signing*password*
+*Release_Key_Recovery*
