@@ -24,6 +24,7 @@ import java.time.LocalDate
 @Composable
 fun DataTransferScreen(
     onFinished: () -> Unit,
+    onAppearanceRestored: (String, Boolean) -> Unit = { _, _ -> },
     uid: String = "offline"
 ) {
     val context = LocalContext.current
@@ -118,6 +119,12 @@ fun DataTransferScreen(
                     scope.launch {
                         try {
                             val count = withContext(Dispatchers.IO) { repo.importBackup(candidate!!) }
+                            if (report.hasAppearance) {
+                                onAppearanceRestored(
+                                    DiaryThemes.load(context),
+                                    ThemeMotionPreferences.read(context)
+                                )
+                            }
                             status = "Перенос завершён. Добавлено " + count +
                                 " медиафайлов, остальные данные из архива проверены."
                             // Keep the screen visible so the user can review the result.
@@ -185,6 +192,7 @@ fun DataTransferScreen(
                 Text("Анкета: " + if (report.hasProfile) "есть" else "нет")
                 Text("Моя вселенная: " + if (report.hasUniverse) "есть" else "нет")
                 Text("Обложки альбомов: " + if (report.hasAlbumCovers) "есть" else "нет")
+                Text("Выбранная тема: " + if (report.hasAppearance) "есть" else "нет")
                 Text("Объём данных: " + (report.bytes / 1024 / 1024) + " МиБ")
                 Text(
                     if (report.verified) "Контрольные суммы SHA-256 совпадают."
