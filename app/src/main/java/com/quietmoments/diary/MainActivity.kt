@@ -722,7 +722,7 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
         DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v2.8 · защита входа и зашифрованные копии", style = MaterialTheme.typography.bodySmall)
+            Text("v2.8.1 · исправление входа по биометрии", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
