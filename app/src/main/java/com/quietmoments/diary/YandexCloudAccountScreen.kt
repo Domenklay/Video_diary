@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yandex.authsdk.YandexAuthLoginOptions
+import com.yandex.authsdk.LoginType
 import com.yandex.authsdk.YandexAuthOptions
 import com.yandex.authsdk.YandexAuthResult
 import com.yandex.authsdk.YandexAuthSdk
@@ -50,7 +51,25 @@ fun YandexCloudAccountScreen(
     var restoredArchive by remember { mutableStateOf<File?>(null) }
     var inspection by remember { mutableStateOf<BackupSummary?>(null) }
     var confirmRestore by remember { mutableStateOf(false) }
+    var showAccountSwitchDialog by remember { mutableStateOf(false) }
+    var switchingAccount by remember { mutableStateOf(false) }
+    var accountVerified by remember { mutableStateOf(true) }
     var lastSuccess by remember { mutableLongStateOf(prefs.getLong("last_success", 0L)) }
+
+    // Account-specific state MUST be cleared after selecting a different
+    // account. ZIPs already stored on the old Disk are never deleted.
+    fun clearSessionState(clearLastSuccess: Boolean) {
+        backups = emptyList()
+        selected = null
+        inspection = null
+        confirmRestore = false
+        restoredArchive?.delete()
+        restoredArchive = null
+        if (clearLastSuccess) {
+            lastSuccess = 0L
+            prefs.edit().remove("last_success").apply()
+        }
+    }
 
     fun refresh(currentToken: String) {
         busy = true
@@ -77,26 +96,40 @@ fun YandexCloudAccountScreen(
                     busy = false
                     error = "Яндекс не предоставил токен для доступа к папке приложения."
                 } else {
+                    // Keep the previous account and its archives untouched
+                    // until the new authorization succeeds. A cancelled
+                    // account change must not disconnect the user.
+                    val changed = switchingAccount
+                    if (changed) clearSessionState(clearLastSuccess = true)
                     token = value
-                    message = "Вход через Яндекс выполнен. Проверяем доступ к резервным копиям."
+                    accountVerified = !changed
+                    switchingAccount = false
+                    message = if (changed) {
+                        "Авторизация выполнена. Перед загрузкой убедись, что в Яндекс ID " +
+                            "выбран нужный аккаунт; прежние копии остались на старом Диске."
+                    } else {
+                        "Вход через Яндекс выполнен. Проверяем доступ к резервным копиям."
+                    }
                     error = ""
                     refresh(value)
                 }
             }
             is YandexAuthResult.Failure -> {
+                switchingAccount = false
                 busy = false
                 error = "Не удалось войти через Яндекс: " +
                     (result.exception.localizedMessage ?: "проверь интернет и регистрацию APK")
             }
             YandexAuthResult.Cancelled -> {
+                switchingAccount = false
                 busy = false
-                message = "Вход через Яндекс отменён."
+                message = "Вход отменён. Предыдущий аккаунт и копии не изменились."
             }
         }
     }
 
     fun uploadNow() {
-        if (token.isBlank() || busy) return
+        if (token.isBlank() || busy || !accountVerified) return
         busy = true
         error = ""
         message = "Подготавливаем и проверяем резервную ZIP-копию…"
@@ -165,6 +198,41 @@ fun YandexCloudAccountScreen(
     DisposableEffect(restoredArchive) {
         val temp = restoredArchive
         onDispose { temp?.delete() }
+    }
+
+    if (showAccountSwitchDialog) {
+        AlertDialog(
+            onDismissRequest = { showAccountSwitchDialog = false },
+            title = { Text("Сменить Яндекс-аккаунт?") },
+            text = {
+                Text("QuietMoments откроет вход в Яндекс через браузер. " +
+                    "В Яндекс ID выбери другой аккаунт или нажми «Войти под другим логином». " +
+                    "Если браузер сразу выбрал прежний аккаунт, переключи его вручную. " +
+                    "Старые облачные копии не удалятся, а отмена сохранит текущее подключение.")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showAccountSwitchDialog = false
+                    busy = true
+                    switchingAccount = true
+                    error = ""
+                    message = "Выбери нужный Яндекс-аккаунт в браузере."
+                    runCatching {
+                        launcher.launch(YandexAuthLoginOptions(LoginType.CHROME_TAB))
+                    }.onFailure {
+                        switchingAccount = false
+                        busy = false
+                        error = "Не удалось открыть выбор аккаунта: " +
+                            (it.localizedMessage ?: "повтори попытку")
+                    }
+                }) { Text("Продолжить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAccountSwitchDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 
     if (confirmRestore && restoredArchive != null && inspection != null) {
@@ -249,19 +317,43 @@ fun YandexCloudAccountScreen(
                         Text("Войти через Яндекс")
                     }
                 } else {
+                    if (!accountVerified) {
+                        Text("Перед сохранением проверь, что при входе выбран нужный " +
+                            "Яндекс-аккаунт. Браузер может автоматически открыть старый.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = accountVerified,
+                                onCheckedChange = { accountVerified = it }
+                            )
+                            Text("Подтверждаю: я выбрала нужный аккаунт Яндекса.",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                     Button(onClick = { uploadNow() },
-                        modifier = Modifier.fillMaxWidth(), enabled = !busy) {
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy && accountVerified) {
                         Icon(Icons.Default.CloudUpload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("Сохранить воспоминания в Яндекс")
                     }
-                    OutlinedButton(onClick = {
+                    OutlinedButton(
+                        onClick = { showAccountSwitchDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy
+                    ) {
+                        Icon(Icons.Default.SwitchAccount, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Сменить Яндекс-аккаунт")
+                    }
+                    TextButton(onClick = {
                         token = ""
-                        backups = emptyList()
-                        selected = null
-                        inspection = null
-                        restoredArchive = null
-                        message = "Яндекс отключён в этом сеансе. Облачные копии сохранены."
+                        accountVerified = true
+                        clearSessionState(clearLastSuccess = true)
+                        message = "Яндекс отключён в этом сеансе. " +
+                            "Облачные копии не удалены. В Яндекс ID авторизация может сохраниться."
                     }, modifier = Modifier.fillMaxWidth(), enabled = !busy) {
                         Text("Отключить Яндекс")
                     }
