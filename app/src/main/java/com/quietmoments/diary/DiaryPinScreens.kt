@@ -13,7 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.LockOutline
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -134,7 +134,7 @@ fun DiaryUnlockScreen(lock: DiaryPinLock, onUnlock: () -> Unit,
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(Icons.Default.LockOutline, contentDescription = null,
+                            Icon(Icons.Default.Lock, contentDescription = null,
                                 tint = Color(0xFFFFE9B2), modifier = Modifier.size(30.dp))
                             Column {
                                 Text("ЛИЧНЫЙ ДНЕВНИК",
@@ -166,7 +166,7 @@ fun DiaryUnlockScreen(lock: DiaryPinLock, onUnlock: () -> Unit,
                             label = { Text("PIN-код") },
                             placeholder = { Text("6–16 цифр") },
                             leadingIcon = {
-                                Icon(Icons.Default.LockOutline, contentDescription = null)
+                                Icon(Icons.Default.Lock, contentDescription = null)
                             },
                             trailingIcon = {
                                 IconButton(onClick = { showPin = !showPin }) {
