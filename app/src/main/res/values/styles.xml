@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The native fallback dialog used by AndroidX Biometric requires
+         AppCompat theme attributes on older Android devices and some OEMs. -->
+    <style name="Theme.QuietMomentsBiometric" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>
