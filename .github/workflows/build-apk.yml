@@ -115,6 +115,17 @@ jobs:
           path: ${{ runner.temp }}/qm-signing-tools/*
           if-no-files-found: error
           retention-days: 7
+      - name: Verify fixed stable identity and permanent signing certificate
+        if: env.QM_KEYSTORE_PATH != ''
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.quietmoments.universeoffline.stable'"
+          ACTUAL=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          EXPECTED=67991072f1509d711a0203c00d1f651ac2a8304ae8d7c90708f1bcec651131c2
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::Wrong permanent signing certificate; refusing to publish APK."
+            exit 1
+          fi
       - name: Upload stable release APK
         if: env.QM_KEYSTORE_PATH != ''
         uses: actions/upload-artifact@v4
