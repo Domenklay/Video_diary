@@ -9,6 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -67,15 +70,29 @@ fun DiaryPinSettings(lock: DiaryPinLock) {
     val canUseBiometrics = remember(context) { BiometricDiaryAuth.available(context) }
     val scope = rememberCoroutineScope()
     var updatingBiometrics by remember { mutableStateOf(false) }
+    var pinWarning by remember { mutableStateOf<String?>(null) }
+    val pinFocusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Защита приложения", style = MaterialTheme.typography.titleMedium)
         Text(if (lock.isEnabled()) "PIN установлен" else "PIN пока не установлен")
-        OutlinedTextField(pin, { pin = it.filter(Char::isDigit).take(16) },
+        OutlinedTextField(
+            value = pin,
+            onValueChange = {
+                pin = it.filter(Char::isDigit).take(16)
+                pinWarning = null
+                if (status == "Сначала введи текущий PIN в поле выше.") status = ""
+            },
             label = { Text(if (lock.isEnabled()) "Текущий PIN (6–16 цифр)"
                 else "Придумай PIN (6–16 цифр)") },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-            modifier = Modifier.fillMaxWidth())
+            modifier = Modifier.fillMaxWidth().focusRequester(pinFocusRequester),
+            isError = pinWarning != null,
+            supportingText = {
+                pinWarning?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        )
         if (!lock.isEnabled()) {
             OutlinedTextField(repeated, { repeated = it.filter(Char::isDigit).take(16) },
                 label = { Text("Повтор PIN") },
@@ -105,14 +122,23 @@ fun DiaryPinSettings(lock: DiaryPinLock) {
                 }
                 Switch(
                     checked = biometricToggle,
-                    enabled = !updatingBiometrics && (canUseBiometrics || biometricToggle),
+                    // Keep the switch tappable: explain missing PIN or unavailable
+                    // biometrics instead of making the control appear broken.
+                    enabled = !updatingBiometrics,
                     onCheckedChange = { wanted ->
                         when {
-                            !canUseBiometrics && wanted ->
-                                status = "На телефоне сейчас недоступна настроенная биометрия."
-                            pin.length < 6 ->
-                                status = "Сначала введи текущий PIN в поле выше."
+                            pin.length < 6 -> {
+                                pinWarning = "Сначала введи текущий PIN (6–16 цифр), затем нажми переключатель."
+                                status = ""
+                                pinFocusRequester.requestFocus()
+                                keyboard?.show()
+                            }
+                            !canUseBiometrics && wanted -> {
+                                pinWarning = null
+                                status = "Биометрия недоступна. Проверь отпечаток в настройках телефона."
+                            }
                             else -> {
+                                pinWarning = null
                                 val submittedPin = pin
                                 pin = ""
                                 updatingBiometrics = true
@@ -123,7 +149,9 @@ fun DiaryPinSettings(lock: DiaryPinLock) {
                                             lock.verify(submittedPin)
                                         }
                                         if (!valid) {
-                                            status = "Неверный PIN. Биометрия не изменена."
+                                            pinWarning = "Неверный PIN. Проверь код и попробуй ещё раз."
+                                            status = ""
+                                            pinFocusRequester.requestFocus()
                                             updatingBiometrics = false
                                         } else if (!wanted) {
                                             val disabled = withContext(Dispatchers.Default) {
