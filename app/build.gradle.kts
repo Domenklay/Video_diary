@@ -12,8 +12,8 @@ android {
         targetSdk = 35
         // Public OAuth client identifier; no secret or user credentials are bundled.
         manifestPlaceholders["YANDEX_CLIENT_ID"] = "51b8d2a4853c4d2ba4a908cebd748281"
-        versionCode = 284
-        versionName = "2.8.4-yandex-account-switch"
+        versionCode = 290
+        versionName = "2.9.0-first-signed-release"
     }
     val stableSigningPath = System.getenv("QM_KEYSTORE_PATH")
     signingConfigs {
@@ -32,10 +32,13 @@ android {
     buildTypes {
         debug {
             // Install preview beside existing versions; never replace private data without a stable key.
-            applicationIdSuffix = ".preview284"
+            applicationIdSuffix = ".preview290"
             versionNameSuffix = "-preview"
         }
         release {
+            // A new, fixed package avoids signature clashes with older v2.1 APKs.
+            // Keep this suffix unchanged for every future release update.
+            applicationIdSuffix = ".stable"
             isMinifyEnabled = false
             if (!stableSigningPath.isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("stableRelease")
