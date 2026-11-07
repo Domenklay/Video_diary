@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v2.2-google-account-sync, v2.3-backup-reliability, v2.3.1-google-play-diagnostics, v2.4-safe-migration, v2.5-universe-fast-navigation, v2.6-yandex-drive, v2.7-ux-first, v2.7.1-compact-ui, v2.7.2-journal-polish, v2.8-security-prototype]
+    branches: [main, v2.2-google-account-sync, v2.3-backup-reliability, v2.3.1-google-play-diagnostics, v2.4-safe-migration, v2.5-universe-fast-navigation, v2.6-yandex-drive, v2.7-ux-first, v2.7.1-compact-ui, v2.7.2-journal-polish, v2.8-security-prototype, v2.8.1-biometric-crash-fix]
   workflow_dispatch:
 
 permissions:

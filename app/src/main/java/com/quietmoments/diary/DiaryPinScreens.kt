@@ -12,6 +12,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun DiaryUnlockScreen(lock: DiaryPinLock, onUnlock: () -> Unit,
@@ -59,7 +63,10 @@ fun DiaryPinSettings(lock: DiaryPinLock) {
     var repeated by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
     var biometricToggle by remember { mutableStateOf(lock.isBiometricEnabled()) }
-    val canUseBiometrics = BiometricDiaryAuth.available(context)
+    // Do not query vendor biometric services on every Compose recomposition.
+    val canUseBiometrics = remember(context) { BiometricDiaryAuth.available(context) }
+    val scope = rememberCoroutineScope()
+    var updatingBiometrics by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Защита приложения", style = MaterialTheme.typography.titleMedium)
         Text(if (lock.isEnabled()) "PIN установлен" else "PIN пока не установлен")
@@ -96,19 +103,84 @@ fun DiaryPinSettings(lock: DiaryPinLock) {
                         else "Сначала настрой биометрию в Android",
                         style = MaterialTheme.typography.bodySmall)
                 }
-                Switch(checked = biometricToggle,
+                Switch(
+                    checked = biometricToggle,
+                    enabled = !updatingBiometrics && (canUseBiometrics || biometricToggle),
                     onCheckedChange = { wanted ->
-                        if (!canUseBiometrics && wanted) {
-                            status = "Биометрия не настроена в системных настройках."
-                        } else if (lock.setBiometricEnabled(wanted, pin)) {
-                            biometricToggle = wanted
-                            status = if (wanted) "Вход по биометрии включён."
-                                else "Вход по биометрии выключен."
-                            pin = ""
-                        } else {
-                            status = "Сначала введи правильный PIN выше."
+                        when {
+                            !canUseBiometrics && wanted ->
+                                status = "На телефоне сейчас недоступна настроенная биометрия."
+                            pin.length < 6 ->
+                                status = "Сначала введи текущий PIN в поле выше."
+                            else -> {
+                                val submittedPin = pin
+                                pin = ""
+                                updatingBiometrics = true
+                                status = "Проверяем PIN…"
+                                scope.launch {
+                                    try {
+                                        val valid = withContext(Dispatchers.Default) {
+                                            lock.verify(submittedPin)
+                                        }
+                                        if (!valid) {
+                                            status = "Неверный PIN. Биометрия не изменена."
+                                            updatingBiometrics = false
+                                        } else if (!wanted) {
+                                            val disabled = withContext(Dispatchers.Default) {
+                                                lock.setBiometricEnabled(false, submittedPin)
+                                            }
+                                            if (disabled) biometricToggle = false
+                                            status = if (disabled) "Вход по биометрии выключен."
+                                                else "Не удалось сохранить изменение."
+                                            updatingBiometrics = false
+                                        } else {
+                                            val activity = context as? FragmentActivity
+                                            if (activity == null) {
+                                                status = "Не удалось открыть системное окно отпечатка."
+                                                updatingBiometrics = false
+                                            } else {
+                                                status = "Подтверди отпечаток в системном окне."
+                                                BiometricDiaryAuth.show(
+                                                    activity,
+                                                    onSuccess = {
+                                                        scope.launch {
+                                                            try {
+                                                                val saved = withContext(Dispatchers.Default) {
+                                                                    lock.setBiometricEnabled(true, submittedPin)
+                                                                }
+                                                                biometricToggle = saved
+                                                                status = if (saved)
+                                                                    "Вход по биометрии включён."
+                                                                else "Не удалось сохранить настройку."
+                                                            } catch (t: Throwable) {
+                                                                status = "Ошибка сохранения настройки: " +
+                                                                    (t.localizedMessage ?: "попробуй снова")
+                                                            } finally {
+                                                                updatingBiometrics = false
+                                                            }
+                                                        }
+                                                    },
+                                                    onError = { message ->
+                                                        status = message
+                                                        updatingBiometrics = false
+                                                    },
+                                                    onCancelled = {
+                                                        status = "Проверка отменена. PIN по-прежнему работает."
+                                                        updatingBiometrics = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    } catch (t: Throwable) {
+                                        status = "Не удалось проверить PIN: " +
+                                            (t.localizedMessage ?: "попробуй снова")
+                                        updatingBiometrics = false
+                                    }
+                                }
+                            }
                         }
-                    }, enabled = canUseBiometrics || biometricToggle)
+                    }
+                )
             }
             OutlinedButton(onClick = {
                 if (lock.disable(pin)) {
