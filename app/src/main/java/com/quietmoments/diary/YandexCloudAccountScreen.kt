@@ -15,7 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yandex.authsdk.YandexAuthLoginOptions
-import com.yandex.authsdk.YandexAuthLoginOptions.LoginType
+import com.yandex.authsdk.internal.strategy.LoginType
 import com.yandex.authsdk.YandexAuthOptions
 import com.yandex.authsdk.YandexAuthResult
 import com.yandex.authsdk.YandexAuthSdk
