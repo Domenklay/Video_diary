@@ -47,6 +47,7 @@ import kotlinx.coroutines.withContext
 fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     initialDate: String = LocalDate.now().toString(),
     openJournalRequest: Int = 0,
+    openMomentRequest: Int = 0, openMomentId: String = "",
     onOpenMoods: () -> Unit = {}, onOpenTransfer: () -> Unit = {}) {
     val context = LocalContext.current
     val palette = LocalDiaryPalette.current
@@ -75,6 +76,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     var deleteId by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<LocalMoment?>(null) }
     var pageMoment by remember { mutableStateOf<LocalMoment?>(null) }
+    var lastHandledMomentRequest by rememberSaveable { mutableIntStateOf(0) }
     var editingCover by remember { mutableStateOf<String?>(null) }
     var coverRevision by remember { mutableStateOf(0) }
     var editTitle by remember { mutableStateOf("") }
@@ -94,12 +96,20 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
         mood = old?.mood ?: profile.favoriteMood
         moodReason = old?.reason ?: ""
     }
-    LaunchedEffect(uid, initialDate) {
+    LaunchedEffect(uid, initialDate, openMomentRequest) {
         runCatching {
             withContext(Dispatchers.IO) { repo.list() to journal.all() }
         }.onSuccess { (files, reflections) ->
             moments = files
             entries = reflections
+            // A tap on a recent home-page photo opens its exact memory, not
+            // merely the general album list. Consume only once per request.
+            if (openMomentRequest > lastHandledMomentRequest) {
+                pageMoment = files.firstOrNull {
+                    it.id == openMomentId && it.deletedAt == 0L
+                }
+                lastHandledMomentRequest = openMomentRequest
+            }
             // Returning to a tab must not erase an unsaved answer or album draft.
             if (loadedForDate != initialDate) {
                 selectDate(runCatching { LocalDate.parse(initialDate) }.getOrDefault(LocalDate.now()))
