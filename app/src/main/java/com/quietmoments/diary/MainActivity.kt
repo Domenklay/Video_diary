@@ -489,8 +489,7 @@ private fun DiaryHomePage(
             ) {
                 Text("✦  ТВОЯ ИСТОРИЯ", color = palette.accent,
                     style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                Text("Каждый день —
-часть твоей истории", color = Color.White,
+                Text("Каждый день —\nчасть твоей истории", color = Color.White,
                     style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Button(
                     onClick = onOpenDiary,
