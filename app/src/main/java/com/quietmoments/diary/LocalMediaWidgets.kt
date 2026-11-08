@@ -9,6 +9,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Image as ImageIcon
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,7 +28,7 @@ import java.io.File
 private val thumbCache = object : LruCache<String, Bitmap>(24) {}
 
 @Composable
-fun MomentThumbnail(repo: LocalMediaRepository, moment: LocalMoment, modifier: Modifier = Modifier) {
+fun MomentThumbnail(repo: LocalMediaRepository, moment: LocalMoment, modifier: Modifier = Modifier, size: Dp = 76.dp) {
     val file = remember(moment.id) { repo.thumbnailFile(moment) }
     val key = remember(file) { "${file.absolutePath}:${file.lastModified()}:${file.length()}" }
     val bmp by produceState<Bitmap?>(initialValue = thumbCache.get(key), key1 = key) {
@@ -51,7 +53,8 @@ fun MomentThumbnail(repo: LocalMediaRepository, moment: LocalMoment, modifier: M
             }.getOrNull()?.also { thumbCache.put(key, it) }
         }
     }
-    Box(modifier.size(76.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
+    Box(modifier.size(size).clip(RoundedCornerShape(12.dp))
+        .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center) {
         if (bmp != null) Image(bmp!!.asImageBitmap(), contentDescription = null,
             modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
