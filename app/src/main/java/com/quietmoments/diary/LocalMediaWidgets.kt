@@ -24,13 +24,25 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.roundToInt
 
 private val thumbCache = object : LruCache<String, Bitmap>(24) {}
 
 @Composable
-fun MomentThumbnail(repo: LocalMediaRepository, moment: LocalMoment, modifier: Modifier = Modifier, size: Dp = 76.dp) {
+fun MomentThumbnail(
+    repo: LocalMediaRepository,
+    moment: LocalMoment,
+    modifier: Modifier = Modifier,
+    size: Dp = 76.dp,
+    aspectRatio: Float = 1f
+) {
     val file = remember(moment.id) { repo.thumbnailFile(moment) }
-    val key = remember(file) { "${file.absolutePath}:${file.lastModified()}:${file.length()}" }
+    // The full-size home cards deserve a higher-resolution decode. Album
+    // rows retain compact thumbnails to avoid unnecessary memory pressure.
+    val targetPixels = if (size >= 110.dp) 512 else 256
+    val key = remember(file, targetPixels) {
+        "${file.absolutePath}:${file.lastModified()}:${file.length()}:$targetPixels"
+    }
     val bmp by produceState<Bitmap?>(initialValue = thumbCache.get(key), key1 = key) {
         if (value != null) return@produceState
         value = withContext(Dispatchers.IO) {
@@ -40,20 +52,33 @@ fun MomentThumbnail(repo: LocalMediaRepository, moment: LocalMoment, modifier: M
                     try {
                         retriever.setDataSource(file.absolutePath)
                         if (Build.VERSION.SDK_INT >= 27) retriever.getScaledFrameAtTime(
-                            -1L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 256, 256)
+                            -1L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                            targetPixels, targetPixels)
                         else retriever.getFrameAtTime(-1L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                     } finally { retriever.release() }
                 } else {
                     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     BitmapFactory.decodeFile(file.absolutePath, options)
-                    val ratio = (maxOf(options.outWidth, options.outHeight) / 256).coerceAtLeast(1)
+                    val ratio = (maxOf(options.outWidth, options.outHeight) / targetPixels)
+                        .coerceAtLeast(1)
                     BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = ratio })
                 }
-                bitmap?.let { Bitmap.createScaledBitmap(it, 192, 192, true) }
+                bitmap?.let { decoded ->
+                    // Keep the source proportions. Square upscaling used to
+                    // distort portrait memories and blur home thumbnails.
+                    val longest = maxOf(decoded.width, decoded.height)
+                    if (longest > targetPixels) {
+                        val scale = targetPixels.toFloat() / longest
+                        Bitmap.createScaledBitmap(decoded,
+                            (decoded.width * scale).roundToInt().coerceAtLeast(1),
+                            (decoded.height * scale).roundToInt().coerceAtLeast(1), true)
+                    } else decoded
+                }
             }.getOrNull()?.also { thumbCache.put(key, it) }
         }
     }
-    Box(modifier.size(size).clip(RoundedCornerShape(12.dp))
+    Box(modifier.width(size).aspectRatio(aspectRatio)
+        .clip(RoundedCornerShape(12.dp))
         .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center) {
         if (bmp != null) Image(bmp!!.asImageBitmap(), contentDescription = null,
