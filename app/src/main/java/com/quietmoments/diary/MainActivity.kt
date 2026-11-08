@@ -9,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -165,6 +167,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
 
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var journalOpenRequest by rememberSaveable { mutableIntStateOf(0) }
+    var addMomentRequest by rememberSaveable { mutableIntStateOf(0) }
     var momentOpenRequest by rememberSaveable { mutableIntStateOf(0) }
     var momentToOpen by rememberSaveable { mutableStateOf("") }
     val tabStateHolder = rememberSaveableStateHolder()
@@ -226,27 +229,40 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     Scaffold(
         containerColor = palette.page,
         bottomBar = {
-            NavigationBar(
-                containerColor = palette.surface,
-                tonalElevation = 6.dp,
-                // Never constrain Material3's intrinsic height: it must include
-                // the navigation bar inset so labels are not clipped on 3-button devices.
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                tabs.forEach { tab ->
-                    NavigationBarItem(
-                        selected = currentTab == tab.id || (currentTab == "profile" && tab.id == "settings"),
-                        onClick = { selectTab(tab.id) },
-                        icon = { Icon(tab.icon, contentDescription = tab.label, modifier = Modifier.size(23.dp)) },
-                        label = { Text(tab.label, maxLines = 1, style = MaterialTheme.typography.labelMedium) },
-                        alwaysShowLabel = true,
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary, selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = palette.soft,
-                            unselectedIconColor = palette.muted,
-                            unselectedTextColor = palette.muted
-                        )
-                    )
+            // The native Material3 NavigationBar added too much height on
+            // compact screens. Keep Android insets but use our own 64dp row.
+            Surface(color = palette.surface, shadowElevation = 4.dp) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tabs.forEach { tab ->
+                        val selected = currentTab == tab.id ||
+                            (currentTab == "profile" && tab.id == "settings")
+                        val tint = if (selected) palette.primary else palette.muted
+                        Column(
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                                .clickable { selectTab(tab.id) }
+                                .padding(vertical = 5.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                Modifier.size(width = 41.dp, height = 28.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(if (selected) palette.soft else Color.Transparent),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(tab.icon, contentDescription = tab.label,
+                                    modifier = Modifier.size(21.dp), tint = tint)
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Text(tab.label, maxLines = 1, color = tint,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                        }
+                    }
                 }
             }
         }
@@ -273,6 +289,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         uid = "offline", pinLock = lock, initialDate = chosenDate,
                         openJournalRequest = journalOpenRequest,
                         openMomentRequest = momentOpenRequest, openMomentId = momentToOpen,
+                        openAddMomentRequest = addMomentRequest,
                         onClose = { currentTab = "home" },
                         onOpenMoods = { currentTab = "moods" },
                         onOpenTransfer = { currentTab = "transfer" }
@@ -363,6 +380,10 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         motionEnabled = motionEnabled, onMotionChange = onMotionChange)
                     else -> DiaryHomePage(
                         onOpenDiary = { currentTab = "diary" },
+                        onOpenCreateMoment = {
+                            addMomentRequest++
+                            currentTab = "diary"
+                        },
                         onOpenQuestion = {
                             chosenDate = LocalDate.now().toString()
                             journalOpenRequest++
@@ -395,6 +416,7 @@ private data class DiaryCounts(val media: Int, val days: Int, val newest: String
 @Composable
 private fun DiaryHomePage(
     onOpenDiary: () -> Unit,
+    onOpenCreateMoment: () -> Unit,
     onOpenQuestion: () -> Unit,
     onOpenMoment: (String) -> Unit,
     onOpenProfile: () -> Unit,
@@ -446,14 +468,14 @@ private fun DiaryHomePage(
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Image(
                 painter = painterResource(R.drawable.ic_launcher_art),
                 contentDescription = "Иконка «Тихие моменты»",
-                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(16.dp))
+                modifier = Modifier.size(46.dp).clip(RoundedCornerShape(14.dp))
             )
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
@@ -461,7 +483,7 @@ private fun DiaryHomePage(
                     style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 Text(if (profile.nickname.isNotBlank()) "Мир " + profile.nickname
                     else "Моё пространство",
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold, color = palette.text,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(LocalDate.now().format(
@@ -474,7 +496,7 @@ private fun DiaryHomePage(
         }
 
         Box(
-            Modifier.fillMaxWidth().height(208.dp)
+            Modifier.fillMaxWidth().height(168.dp)
                 .clip(RoundedCornerShape(26.dp))
                 .background(Brush.linearGradient(listOf(palette.heroStart, palette.heroEnd)))
         ) {
@@ -484,18 +506,19 @@ private fun DiaryHomePage(
                 listOf(Color(0x30221836), Color(0xC5211537)))))
             DecorativeFrame(palette, Modifier.matchParentSize(), subtle = true)
             Column(
-                Modifier.align(Alignment.BottomStart).padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                Modifier.align(Alignment.BottomStart).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text("✦  ТВОЯ ИСТОРИЯ", color = palette.accent,
                     style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 Text("Каждый день —\nчасть твоей истории", color = Color.White,
-                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Button(
-                    onClick = onOpenDiary,
+                    onClick = onOpenCreateMoment,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = palette.accent, contentColor = Color(0xFF241D2A)),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.height(42.dp)
                 ) {
                     Icon(Icons.Default.Create, contentDescription = null,
                         modifier = Modifier.size(18.dp))
@@ -509,8 +532,9 @@ private fun DiaryHomePage(
             horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) {
                 Text("Последние воспоминания",
-                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
-                    color = palette.text)
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    color = palette.text, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis)
                 Text("${counts.media} фото и видео · ${counts.days} записей дня",
                     style = MaterialTheme.typography.bodySmall, color = palette.muted)
             }
@@ -518,15 +542,20 @@ private fun DiaryHomePage(
         }
 
         if (recent.isEmpty()) {
-            DiarySectionCard {
-                Text("Здесь появятся твои фотографии и видео",
-                    style = MaterialTheme.typography.titleMedium, color = palette.text)
-                Text("Сохрани первый момент — и главная страница станет твоей личной галереей.",
-                    style = MaterialTheme.typography.bodyMedium, color = palette.muted)
-                FilledTonalButton(onClick = onOpenDiary) {
-                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Добавить воспоминание")
+            // The main banner is the only create action. Keep the empty
+            // gallery a compact explanation rather than a second CTA.
+            QuietHomeCard {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.PhotoLibrary, contentDescription = null,
+                        modifier = Modifier.size(27.dp), tint = palette.primary)
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Твоя галерея пока пуста",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold, color = palette.text)
+                        Text("Сохрани первый момент — и фотографии появятся здесь.",
+                            style = MaterialTheme.typography.bodySmall, color = palette.muted)
+                    }
                 }
             }
         } else {
@@ -544,16 +573,16 @@ private fun DiaryHomePage(
             }
         }
 
-        DiarySectionCard {
+        QuietHomeCard {
             Row(verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = palette.primary)
-                Text("Вопрос дня", style = MaterialTheme.typography.titleLarge,
+                Text("Вопрос дня", style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold, color = palette.text)
             }
             Text(LocalJournal.questionFor(LocalDate.now(), profile.questionTheme),
                 style = MaterialTheme.typography.bodyLarge, color = palette.text)
-            Button(onClick = onOpenQuestion, modifier = Modifier.fillMaxWidth(),
+            Button(onClick = onOpenQuestion, modifier = Modifier.fillMaxWidth().height(44.dp),
                 shape = RoundedCornerShape(14.dp)) {
                 Text("Ответить в дневнике")
                 Spacer(Modifier.width(8.dp))
@@ -563,11 +592,11 @@ private fun DiaryHomePage(
 
         if (counts.anniversaries.isNotEmpty() ||
             counts.anniversaryReflections.isNotEmpty()) {
-            DiarySectionCard {
+            QuietHomeCard {
                 Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Default.History, contentDescription = null, tint = palette.primary)
-                    Text("В этот день", style = MaterialTheme.typography.titleLarge,
+                    Text("В этот день", style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold, color = palette.text)
                 }
                 counts.anniversaries.forEach { memory ->
@@ -595,8 +624,8 @@ private fun DiaryHomePage(
             OutlinedCard(onClick = onOpenCapsules, modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.outlinedCardColors(containerColor = palette.surface)) {
-                Column(Modifier.fillMaxWidth().padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.fillMaxWidth().padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Icon(Icons.Default.MarkEmailUnread, contentDescription = null,
                         tint = palette.primary)
                     Text("Капсула времени", style = MaterialTheme.typography.bodyMedium,
@@ -606,8 +635,8 @@ private fun DiaryHomePage(
             OutlinedCard(onClick = onOpenMoods, modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.outlinedCardColors(containerColor = palette.surface)) {
-                Column(Modifier.fillMaxWidth().padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.fillMaxWidth().padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Icon(Icons.Default.Favorite, contentDescription = null,
                         tint = palette.primary)
                     Text("Моё настроение", style = MaterialTheme.typography.bodyMedium,
@@ -616,6 +645,21 @@ private fun DiaryHomePage(
             }
         }
         Spacer(Modifier.height(6.dp))
+    }
+}
+
+/** Subtle surfaces for the personal home; the illustrated hero retains its ornate frame. */
+@Composable
+private fun QuietHomeCard(content: @Composable ColumnScope.() -> Unit) {
+    val palette = LocalDiaryPalette.current
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = palette.surface),
+        border = BorderStroke(1.dp, palette.primary.copy(alpha = .25f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp), content = content)
     }
 }
 
@@ -635,7 +679,8 @@ private fun PersonalMomentCard(
             BoxWithConstraints(Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center) {
                 val pictureSize = minOf(maxWidth, 142.dp)
-                MomentThumbnail(repo, moment, size = pictureSize)
+                MomentThumbnail(repo, moment, size = pictureSize,
+                    aspectRatio = .8f)
             }
             Text(moment.title, style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold, color = palette.text,
@@ -643,7 +688,13 @@ private fun PersonalMomentCard(
             Row(verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()) {
-                Text(moment.memoryDate, color = palette.muted,
+                val visibleDate = remember(moment.memoryDate) {
+                    runCatching {
+                        LocalDate.parse(moment.memoryDate).format(
+                            DateTimeFormatter.ofPattern("d MMM yyyy", Locale("ru")))
+                    }.getOrDefault(moment.memoryDate)
+                }
+                Text(visibleDate, color = palette.muted,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (moment.kind == "video") {

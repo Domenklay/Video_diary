@@ -48,6 +48,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     initialDate: String = LocalDate.now().toString(),
     openJournalRequest: Int = 0,
     openMomentRequest: Int = 0, openMomentId: String = "",
+    openAddMomentRequest: Int = 0,
     onOpenMoods: () -> Unit = {}, onOpenTransfer: () -> Unit = {}) {
     val context = LocalContext.current
     val palette = LocalDiaryPalette.current
@@ -84,6 +85,7 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
     var editDate by remember { mutableStateOf("") }
     var calendarVisible by rememberSaveable { mutableStateOf(false) }
     var addMomentOpen by rememberSaveable { mutableStateOf(false) }
+    var lastHandledAddRequest by rememberSaveable { mutableIntStateOf(0) }
 
     fun refresh() {
         runCatching { repo.list() }.onSuccess { moments = it }.onFailure { error = it.localizedMessage.orEmpty() }
@@ -122,6 +124,17 @@ fun LocalMomentsScreen(uid: String, onClose: () -> Unit, pinLock: DiaryPinLock,
         if (openJournalRequest > 0) {
             journalOpen = true
             calendarVisible = false
+        }
+    }
+    // Main home "Записать момент" opens the entry form immediately, while
+    // normal diary navigation still preserves the user's current draft.
+    LaunchedEffect(openAddMomentRequest) {
+        if (openAddMomentRequest > lastHandledAddRequest) {
+            addMomentOpen = true
+            searchQuery = ""
+            showTrash = false
+            selectedAlbum = "Все"
+            lastHandledAddRequest = openAddMomentRequest
         }
     }
 
