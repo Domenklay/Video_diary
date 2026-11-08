@@ -165,6 +165,8 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
 
     var chosenDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var journalOpenRequest by rememberSaveable { mutableIntStateOf(0) }
+    var momentOpenRequest by rememberSaveable { mutableIntStateOf(0) }
+    var momentToOpen by rememberSaveable { mutableStateOf("") }
     val tabStateHolder = rememberSaveableStateHolder()
 
     fun openUniverse() {
@@ -270,6 +272,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                     "diary" -> LocalMomentsScreen(
                         uid = "offline", pinLock = lock, initialDate = chosenDate,
                         openJournalRequest = journalOpenRequest,
+                        openMomentRequest = momentOpenRequest, openMomentId = momentToOpen,
                         onClose = { currentTab = "home" },
                         onOpenMoods = { currentTab = "moods" },
                         onOpenTransfer = { currentTab = "transfer" }
@@ -365,10 +368,13 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             journalOpenRequest++
                             currentTab = "diary"
                         },
-                        onOpenUniverse = { openUniverse() },
-                        onOpenSettings = { currentTab = "settings" },
                         onOpenProfile = { profileBackTab = "home"; currentTab = "profile" },
                         onOpenCapsules = { currentTab = "capsules" },
+                        onOpenMoment = { id ->
+                            momentToOpen = id
+                            momentOpenRequest++
+                            currentTab = "diary"
+                        },
                         onOpenMoods = { currentTab = "moods" },
                         onOpenDay = { selected ->
                             chosenDate = selected
@@ -390,8 +396,7 @@ private data class DiaryCounts(val media: Int, val days: Int, val newest: String
 private fun DiaryHomePage(
     onOpenDiary: () -> Unit,
     onOpenQuestion: () -> Unit,
-    onOpenUniverse: () -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenMoment: (String) -> Unit,
     onOpenProfile: () -> Unit,
     onOpenCapsules: () -> Unit,
     onOpenMoods: () -> Unit,
@@ -399,203 +404,255 @@ private fun DiaryHomePage(
 ) {
     val palette = LocalDiaryPalette.current
     val context = LocalContext.current
+    val repo = remember(context) { LocalMediaRepository(context, "offline") }
     var profile by remember { mutableStateOf(DiaryProfile()) }
     var counts by remember { mutableStateOf(DiaryCounts(0, 0, null)) }
+    var recent by remember { mutableStateOf(emptyList<LocalMoment>()) }
     LaunchedEffect(Unit) {
         profile = withContext(Dispatchers.IO) {
             runCatching { DiaryProfileRepository(context).read() }.getOrDefault(DiaryProfile())
         }
-    }
-    LaunchedEffect(Unit) {
-        counts = withContext(Dispatchers.IO) {
+        val snapshot = withContext(Dispatchers.IO) {
             runCatching {
-                val media = LocalMediaRepository(context, "offline").list().filter { it.deletedAt == 0L }
+                val media = repo.list().filter { it.deletedAt == 0L }
                 val journalEntries = LocalJournal(context, "offline").all()
                 val today = LocalDate.now()
-                val matches = media.filter {
+                val oldMedia = media.filter {
                     runCatching {
                         val date = LocalDate.parse(it.memoryDate)
-                        date.year < today.year &&
-                            date.monthValue == today.monthValue &&
+                        date.year < today.year && date.monthValue == today.monthValue &&
                             date.dayOfMonth == today.dayOfMonth
                     }.getOrDefault(false)
                 }.sortedByDescending { it.memoryDate }.take(4)
-                val reflected = journalEntries.filter {
+                val oldJournal = journalEntries.filter {
                     runCatching {
                         val date = LocalDate.parse(it.date)
-                        date.year < today.year &&
-                            date.monthValue == today.monthValue &&
+                        date.year < today.year && date.monthValue == today.monthValue &&
                             date.dayOfMonth == today.dayOfMonth
                     }.getOrDefault(false)
                 }.sortedByDescending { it.date }.take(4)
-                val sealedCount = TimeCapsuleRepository(context, "offline").all()
-                    .count { !it.ready(today) }
-                DiaryCounts(media.size, journalEntries.size,
+                val count = DiaryCounts(
+                    media.size, journalEntries.size,
                     media.maxByOrNull { it.createdAt }?.title,
-                    matches, reflected, sealedCount)
-            }.getOrDefault(DiaryCounts(0, 0, null))
+                    oldMedia, oldJournal,
+                    TimeCapsuleRepository(context, "offline").all().count { !it.ready(today) }
+                )
+                count to media.sortedByDescending { it.createdAt }.take(4)
+            }.getOrElse { DiaryCounts(0, 0, null) to emptyList() }
         }
+        counts = snapshot.first
+        recent = snapshot.second
     }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Image(
                 painter = painterResource(R.drawable.ic_launcher_art),
                 contentDescription = "Иконка «Тихие моменты»",
-                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(17.dp))
+                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(16.dp))
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text("ТИХИЕ МОМЕНТЫ", color = palette.primary, fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.labelMedium)
+                Text("ТИХИЕ МОМЕНТЫ", color = palette.primary,
+                    style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 Text(if (profile.nickname.isNotBlank()) "Мир " + profile.nickname
-                     else "Моё пространство",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.SemiBold, color = palette.text,
+                    else "Моё пространство",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold, color = palette.text,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(LocalDate.now().format(DateTimeFormatter.ofPattern("d MMMM, EEEE", Locale("ru"))),
+                Text(LocalDate.now().format(
+                    DateTimeFormatter.ofPattern("d MMMM, EEEE", Locale("ru"))),
                     color = palette.muted, style = MaterialTheme.typography.bodySmall)
             }
-            FilledTonalIconButton(onClick = onOpenSettings) {
-                Icon(Icons.Default.Settings, contentDescription = "Настройки")
+            FilledTonalIconButton(onClick = onOpenProfile) {
+                Icon(Icons.Default.AccountCircle, contentDescription = "Моя анкета")
             }
         }
 
         Box(
-            Modifier.fillMaxWidth().height(236.dp)
-                .clip(RoundedCornerShape(28.dp))
+            Modifier.fillMaxWidth().height(208.dp)
+                .clip(RoundedCornerShape(26.dp))
                 .background(Brush.linearGradient(listOf(palette.heroStart, palette.heroEnd)))
         ) {
-            IllustratedThemeBackground(palette, modifier = Modifier.fillMaxSize(), alpha = 1f)
-            LivingThemeParticles(palette, Modifier.fillMaxSize(), strength = 1f)
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(Color(0x52221836), Color(0xB6211537)))
-                )
-            )
-            DecorativeFrame(palette, Modifier.matchParentSize())
+            IllustratedThemeBackground(palette, Modifier.matchParentSize(), alpha = 1f)
+            LivingThemeParticles(palette, Modifier.matchParentSize(), strength = .56f)
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(
+                listOf(Color(0x30221836), Color(0xC5211537)))))
+            DecorativeFrame(palette, Modifier.matchParentSize(), subtle = true)
             Column(
                 Modifier.align(Alignment.BottomStart).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("✦  ТВОЯ ИСТОРИЯ", color = palette.accent,
                     style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                Text("Сохрани красоту\nкаждого дня", color = Color.White,
-                    style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text("Каждый день —
+часть твоей истории", color = Color.White,
+                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Button(
                     onClick = onOpenDiary,
-                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent, contentColor = Color(0xFF241D2A)),
-                    shape = RoundedCornerShape(16.dp)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.accent, contentColor = Color(0xFF241D2A)),
+                    shape = RoundedCornerShape(14.dp)
                 ) {
-                    Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(19.dp))
+                    Icon(Icons.Default.Create, contentDescription = null,
+                        modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Записать воспоминание", fontWeight = FontWeight.SemiBold)
+                    Text("Записать момент", fontWeight = FontWeight.SemiBold)
                 }
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            DashboardNumber("Фото и видео", counts.media.toString(), Icons.Default.PhotoLibrary, Modifier.weight(1f))
-            DashboardNumber("Записей дня", counts.days.toString(), Icons.Default.CalendarMonth, Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text("Последние воспоминания",
+                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                    color = palette.text)
+                Text("${counts.media} фото и видео · ${counts.days} записей дня",
+                    style = MaterialTheme.typography.bodySmall, color = palette.muted)
+            }
+            TextButton(onClick = onOpenDiary) { Text("Все") }
+        }
+
+        if (recent.isEmpty()) {
+            DiarySectionCard {
+                Text("Здесь появятся твои фотографии и видео",
+                    style = MaterialTheme.typography.titleMedium, color = palette.text)
+                Text("Сохрани первый момент — и главная страница станет твоей личной галереей.",
+                    style = MaterialTheme.typography.bodyMedium, color = palette.muted)
+                FilledTonalButton(onClick = onOpenDiary) {
+                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Добавить воспоминание")
+                }
+            }
+        } else {
+            recent.chunked(2).forEach { pair ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    pair.forEach { moment ->
+                        PersonalMomentCard(
+                            repo = repo, moment = moment,
+                            onClick = { onOpenMoment(moment.id) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
         }
 
         DiarySectionCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AccountCircle, contentDescription = null,
-                    modifier = Modifier.size(32.dp), tint = palette.primary)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(if (profile.hasContent) "Моя анкета" else "Давай познакомимся",
-                        style = MaterialTheme.typography.titleMedium,
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = palette.primary)
+                Text("Вопрос дня", style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold, color = palette.text)
+            }
+            Text(LocalJournal.questionFor(LocalDate.now(), profile.questionTheme),
+                style = MaterialTheme.typography.bodyLarge, color = palette.text)
+            Button(onClick = onOpenQuestion, modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)) {
+                Text("Ответить в дневнике")
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.Default.ChevronRight, contentDescription = null)
+            }
+        }
+
+        if (counts.anniversaries.isNotEmpty() ||
+            counts.anniversaryReflections.isNotEmpty()) {
+            DiarySectionCard {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.History, contentDescription = null, tint = palette.primary)
+                    Text("В этот день", style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold, color = palette.text)
-                    Text(if (profile.hasContent && profile.diaryWish.isNotBlank())
-                            profile.diaryWish
-                         else "Имя, дорогие воспоминания, мечты и цели дневника",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2)
                 }
-                FilledTonalButton(onClick = onOpenProfile) {
-                    Text(if (profile.hasContent) "Открыть" else "Заполнить")
-                }
-            }
-        }
-        Text("Мои разделы", style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold, color = palette.text)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DashboardTile(
-                "Мой дневник", "Альбомы, видео и календарь", Icons.Default.AutoStories,
-                palette.secondarySoft, palette.primary, onOpenDiary, Modifier.weight(1f)
-            )
-            DashboardTile(
-                "Моя вселенная", "Гороскопы, Луна и карты", Icons.Default.NightsStay,
-                palette.soft, palette.primary, onOpenUniverse, Modifier.weight(1f)
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DashboardTile(
-                "Капсула времени", "Письма и видео в будущее",
-                Icons.Default.MarkEmailUnread,
-                palette.secondarySoft, palette.primary,
-                onOpenCapsules, Modifier.weight(1f)
-            )
-            DashboardTile(
-                "Моё настроение", "Календарь и история эмоций",
-                Icons.Default.Favorite,
-                palette.soft, palette.primary,
-                onOpenMoods, Modifier.weight(1f)
-            )
-        }
-        DiarySectionCard {
-            Text("В этот день", style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold)
-            if (counts.anniversaries.isEmpty() &&
-                counts.anniversaryReflections.isEmpty()) {
-                Text("Здесь появятся воспоминания, записанные в этот же день в прошлые годы.",
-                    style = MaterialTheme.typography.bodyMedium)
-            } else {
                 counts.anniversaries.forEach { memory ->
-                    TextButton(onClick = { onOpenDay(memory.memoryDate) }) {
-                        Column {
+                    TextButton(onClick = { onOpenMoment(memory.id) },
+                        modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.fillMaxWidth()) {
                             Text(memory.title, style = MaterialTheme.typography.titleSmall)
                             Text(memory.memoryDate, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
                 counts.anniversaryReflections.forEach { reflection ->
-                    TextButton(onClick = { onOpenDay(reflection.date) }) {
-                        Text("Запись " + reflection.date + " · " + reflection.mood)
+                    TextButton(onClick = { onOpenDay(reflection.date) },
+                        modifier = Modifier.fillMaxWidth()) {
+                        Text("Запись ${reflection.date} · ${reflection.mood}",
+                            modifier = Modifier.fillMaxWidth())
                     }
                 }
             }
         }
-        UniverseBanner(onOpen = onOpenUniverse)
-        DiarySectionCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.FavoriteBorder, contentDescription = null, tint = palette.primary)
-                Spacer(Modifier.width(9.dp))
-                Text("Мой сегодняшний вопрос", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold)
+
+        Text("Ещё для тебя", style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold, color = palette.text)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedCard(onClick = onOpenCapsules, modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.outlinedCardColors(containerColor = palette.surface)) {
+                Column(Modifier.fillMaxWidth().padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Default.MarkEmailUnread, contentDescription = null,
+                        tint = palette.primary)
+                    Text("Капсула времени", style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold, color = palette.text)
+                }
             }
-            Text(LocalJournal.questionFor(LocalDate.now(), profile.questionTheme),
-                style = MaterialTheme.typography.bodyLarge)
-            TextButton(onClick = onOpenQuestion) {
-                Text("Ответить в дневнике")
-                Icon(Icons.Default.ChevronRight, contentDescription = null)
+            OutlinedCard(onClick = onOpenMoods, modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.outlinedCardColors(containerColor = palette.surface)) {
+                Column(Modifier.fillMaxWidth().padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Default.Favorite, contentDescription = null,
+                        tint = palette.primary)
+                    Text("Моё настроение", style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold, color = palette.text)
+                }
             }
         }
-        if (!counts.newest.isNullOrBlank()) {
-            DiarySectionCard {
-                Text("Последнее воспоминание", style = MaterialTheme.typography.titleMedium)
-                Text(counts.newest.orEmpty(), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                TextButton(onClick = onOpenDiary) { Text("Открыть альбом") }
+        Spacer(Modifier.height(6.dp))
+    }
+}
+
+@Composable
+private fun PersonalMomentCard(
+    repo: LocalMediaRepository,
+    moment: LocalMoment,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalDiaryPalette.current
+    Card(onClick = onClick, modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = palette.surface)) {
+        Column(Modifier.fillMaxWidth().padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            BoxWithConstraints(Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center) {
+                val pictureSize = minOf(maxWidth, 142.dp)
+                MomentThumbnail(repo, moment, size = pictureSize)
+            }
+            Text(moment.title, style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold, color = palette.text,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, minLines = 2)
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()) {
+                Text(moment.memoryDate, color = palette.muted,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (moment.kind == "video") {
+                    Icon(Icons.Default.PlayCircleOutline, contentDescription = "Видео",
+                        tint = palette.primary, modifier = Modifier.size(18.dp))
+                }
             }
         }
-        Spacer(Modifier.height(12.dp))
     }
 }
 
