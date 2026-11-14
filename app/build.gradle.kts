@@ -5,15 +5,15 @@ plugins {
 }
 android {
     namespace = "com.quietmoments.diary"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "com.quietmoments.universeoffline"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         // Public OAuth client identifier; no secret or user credentials are bundled.
         manifestPlaceholders["YANDEX_CLIENT_ID"] = "51b8d2a4853c4d2ba4a908cebd748281"
-        versionCode = 292
-        versionName = "2.9.2-compact-home"
+        versionCode = 300
+        versionName = "3.0.0-play-preparation"
     }
     val stableSigningPath = System.getenv("QM_KEYSTORE_PATH")
     signingConfigs {
@@ -32,7 +32,7 @@ android {
     buildTypes {
         debug {
             // Install preview beside existing versions; never replace private data without a stable key.
-            applicationIdSuffix = ".preview292"
+            applicationIdSuffix = ".preview300"
             versionNameSuffix = "-preview"
         }
         release {

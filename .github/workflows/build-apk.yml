@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [main, v2.2-google-account-sync, v2.3-backup-reliability, v2.3.1-google-play-diagnostics, v2.4-safe-migration, v2.5-universe-fast-navigation, v2.6-yandex-drive, v2.7-ux-first, v2.7.1-compact-ui, v2.7.2-journal-polish, v2.8-security-prototype, v2.8.1-biometric-crash-fix, v2.8.2-biometric-pin-hint, v2.8.3-illustrated-pin-screen, v2.8.4-yandex-account-switch, v2.9-permanent-release-signing, v2.9.1-personal-home, v2.9.2-compact-home-ui]
+    branches: [main, v2.2-google-account-sync, v2.3-backup-reliability, v2.3.1-google-play-diagnostics, v2.4-safe-migration, v2.5-universe-fast-navigation, v2.6-yandex-drive, v2.7-ux-first, v2.7.1-compact-ui, v2.7.2-journal-polish, v2.8-security-prototype, v2.8.1-biometric-crash-fix, v2.8.2-biometric-pin-hint, v2.8.3-illustrated-pin-screen, v2.8.4-yandex-account-switch, v2.9-permanent-release-signing, v2.9.1-personal-home, v2.9.2-compact-home-ui, v3.0-google-play-aab]
   workflow_dispatch:
 
 permissions:
@@ -32,7 +32,7 @@ jobs:
             echo "::error::sdkmanager not found under $ANDROID_HOME"
             exit 1
           fi
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --install "platforms;android-35" "build-tools;35.0.0"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --install "platforms;android-36" "build-tools;35.0.0"
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
       - name: Verify Universe descriptions
         run: node --test universe/tests/interpretations.test.cjs
@@ -40,10 +40,10 @@ jobs:
         run: python3 universe/tests/theme_assets.py
       - name: Verify Universe fast navigation contract
         run: python3 universe/tests/fast_navigation.py
-      - name: Gradle 8.9
+      - name: Gradle 8.11.1
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.11.1'
       - name: Verify cloud backup snapshot invariants
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest
       - name: Compile debug APK
@@ -81,6 +81,34 @@ jobs:
           QM_KEY_ALIAS: ${{ secrets.QM_KEY_ALIAS }}
           QM_KEY_PASSWORD: ${{ secrets.QM_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
+      - name: Build Google Play AAB
+        env:
+          QM_KEYSTORE_PASSWORD: ${{ secrets.QM_KEYSTORE_PASSWORD }}
+          QM_KEY_ALIAS: ${{ secrets.QM_KEY_ALIAS }}
+          QM_KEY_PASSWORD: ${{ secrets.QM_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:bundleRelease
+      - name: Check Android App Bundle contents
+        run: |
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          test -s "$AAB"
+          unzip -t "$AAB" | tail -1
+          unzip -l "$AAB" | grep -F 'base/manifest/AndroidManifest.xml'
+      - name: Upload unsigned Play AAB for offline signing
+        if: env.QM_KEYSTORE_PATH == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuietMoments-Universe-play-aab-unsigned
+          path: app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload signed Play AAB
+        if: env.QM_KEYSTORE_PATH != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuietMoments-Universe-google-play-aab
+          path: app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
       - name: Verify release native-library alignment
         run: |
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then
