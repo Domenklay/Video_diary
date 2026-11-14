@@ -91,7 +91,7 @@ fun DiaryUnlockScreen(lock: DiaryPinLock, onUnlock: () -> Unit,
             listOf(Color(0xB5211235), Color(0x99211236), Color(0xD51B112B)))))
         LivingThemeParticles(palette, Modifier.matchParentSize(), strength = .7f)
         Column(
-            modifier = Modifier.fillMaxSize().imePadding()
+            modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
