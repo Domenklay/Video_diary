@@ -199,6 +199,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
         when (currentTab) {
             "home" -> activity.finishAffinity()
             "protected" -> currentTab = "cloudHub"
+            "privacy" -> currentTab = "settings"
             "cloudHub" -> currentTab = "settings"
             "cloud" -> {
                 cloudWelcome.edit().putBoolean("google_welcome_seen", true).apply()
@@ -327,6 +328,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             onMotionChange(enabled)
                         }
                     )
+                    "privacy" -> PrivacyPolicyScreen(onBack = { currentTab = "settings" })
                     "protected" -> ProtectedBackupScreen(
                         onBack = { currentTab = "cloudHub" },
                         onAppearanceRestored = { id, enabled ->
@@ -389,6 +391,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         onOpenDiary = { currentTab = "diary" },
                         onOpenTransfer = { currentTab = "transfer" },
                         onOpenCloudHub = { currentTab = "cloudHub" },
+                        onOpenPrivacy = { currentTab = "privacy" },
                         onOpenProfile = { profileBackTab = "settings"; currentTab = "profile" },
                         themeId = themeId, onSelectTheme = onSelectTheme,
                         motionEnabled = motionEnabled, onMotionChange = onMotionChange)
@@ -764,6 +767,7 @@ private fun DashboardTile(
 @Composable
 private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
     onOpenTransfer: () -> Unit, onOpenCloudHub: () -> Unit,
+    onOpenPrivacy: () -> Unit,
     onOpenProfile: () -> Unit,
     themeId: String, onSelectTheme: (String) -> Unit,
     motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
@@ -841,9 +845,24 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
             }
         }
         DiarySectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.PrivacyTip, contentDescription = null,
+                    tint = palette.primary)
+                Spacer(Modifier.width(10.dp))
+                Text("Политика конфиденциальности",
+                    style = MaterialTheme.typography.titleMedium)
+            }
+            Text("Как хранятся воспоминания, когда используются облачные копии " +
+                "и какие данные защищает PIN.",
+                style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = onOpenPrivacy, modifier = Modifier.fillMaxWidth()) {
+                Text("Открыть политику · RU / EN")
+            }
+        }
+        DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v2.8.4 · смена Яндекс-аккаунта", style = MaterialTheme.typography.bodySmall)
+            Text("v3.0.1 · подготовка к Google Play", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
