@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
 import com.quietmoments.universe.DiarySessionGate
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Image
@@ -91,12 +92,6 @@ class MainActivity : FragmentActivity() {
         super.onResume()
         foregroundEpoch++
         UniverseActivity.consumeNavigation()?.let { universeNavigation = it }
-    }
-
-    override fun onBackPressed() {
-        // The Universe activity can remain behind MainActivity for instant returns.
-        // Back from the main screen must exit instead of exposing it unexpectedly.
-        finishAffinity()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -186,6 +181,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     }
 
     if (!unlocked) {
+        BackHandler { activity.finishAffinity() }
         DiaryUnlockScreen(lock,
             onUnlock = { DiarySessionGate.unlock(); unlocked = true },
             onBiometric = { onError ->
@@ -195,6 +191,24 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                 )
             })
         return
+    }
+    // The Android 16 back gesture bypasses legacy Activity.onBackPressed().
+    // Keep the previous screen-specific destinations and avoid accidentally
+    // revealing the retained UniverseActivity behind MainActivity.
+    BackHandler {
+        when (currentTab) {
+            "home" -> activity.finishAffinity()
+            "protected" -> currentTab = "cloudHub"
+            "cloudHub" -> currentTab = "settings"
+            "cloud" -> {
+                cloudWelcome.edit().putBoolean("google_welcome_seen", true).apply()
+                currentTab = cloudBackTab
+            }
+            "yandex" -> currentTab = "cloudHub"
+            "drive" -> currentTab = driveBackTab
+            "profile" -> currentTab = profileBackTab
+            else -> currentTab = "home"
+        }
     }
     // Receive navigation after the PIN gate, including after a restored Activity.
     // No saved PIN-unlocked state or duplicated WebView is needed.
