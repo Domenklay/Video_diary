@@ -72,8 +72,9 @@ class BackupZipWriter(private val zip: ZipOutputStream) {
 }
 
 object BackupArchive {
-    const val MAX_SINGLE_MEDIA = 500L * 1024L * 1024L
-    private const val MAX_TOTAL = 2L * 1024L * 1024L * 1024L
+    // Local ZIP/.qmb media archives use Zip64 and streaming; no 500 MiB cap.
+    const val MAX_SINGLE_MEDIA = 8L * 1024L * 1024L * 1024L
+    private const val MAX_TOTAL = 16L * 1024L * 1024L * 1024L
     private const val MAX_FILE_COUNT = 50_000
     private val mediaPath = Regex("media/[A-Za-z0-9_-]+\\.(mp4|img)")
     private val capsulePath = Regex("capsules/media/[a-f0-9-]{36}\\.(mp4|img)")
