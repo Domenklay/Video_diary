@@ -2,6 +2,8 @@ package com.quietmoments.universe;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import android.util.AtomicFile;
@@ -93,6 +95,16 @@ public final class UniverseActivity extends ComponentActivity {
         keepSystemNavigationHidden();
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(21,19,34));
+        // Target API 36 forces edge-to-edge. Keep interactive WebView content
+        // clear of the status bar / cutout while retaining the illustrated
+        // background beneath system bars.
+        ViewCompat.setOnApplyWindowInsetsListener(web, (view, insets) -> {
+            Insets safe = insets.getInsets(WindowInsetsCompat.Type.statusBars()
+                | WindowInsetsCompat.Type.navigationBars()
+                | WindowInsetsCompat.Type.displayCutout());
+            view.setPadding(safe.left, safe.top, safe.right, safe.bottom);
+            return insets;
+        });
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
