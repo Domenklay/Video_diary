@@ -37,8 +37,8 @@ object EncryptedArchiveCodec {
     private const val CHUNK_BYTES = 64 * 1024
     private const val TAG_BYTES = 16
     private const val KDF_ITERATIONS = 210_000
-    private const val MAX_CHUNKS = 40_000
-    private const val MAX_PLAINTEXT = 2L * 1024L * 1024L * 1024L + 8L * 1024L * 1024L
+    private const val MAX_CHUNKS = 264_000
+    private const val MAX_PLAINTEXT = 16L * 1024L * 1024L * 1024L + 8L * 1024L * 1024L
 
     private fun derive(password: CharArray, salt: ByteArray): SecretKeySpec {
         require(password.size >= 12) { "Для защищённой копии нужен пароль не короче 12 символов" }

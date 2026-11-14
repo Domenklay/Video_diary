@@ -124,8 +124,10 @@ fun CloudHubScreen(
                 Spacer(Modifier.width(9.dp))
                 Text("О защите данных", style = MaterialTheme.typography.titleMedium)
             }
-            Text("Обычные облачные ZIP-копии не зашифрованы. " +
-                "Для защиты паролем используй отдельный архив .qmb.",
+            Text("Обычные облачные ZIP-копии не зашифрованы и пока " +
+                "ограничены размером до 2 ГиБ. Для большой видеотеки " +
+                "используй локальный ZIP или защищённый .qmb; " +
+                "создавай резервные копии при достаточном свободном месте.",
                 style = MaterialTheme.typography.bodySmall)
         }
     }

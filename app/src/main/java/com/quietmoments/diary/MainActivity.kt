@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
 import com.quietmoments.universe.DiarySessionGate
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Image
@@ -91,12 +92,6 @@ class MainActivity : FragmentActivity() {
         super.onResume()
         foregroundEpoch++
         UniverseActivity.consumeNavigation()?.let { universeNavigation = it }
-    }
-
-    override fun onBackPressed() {
-        // The Universe activity can remain behind MainActivity for instant returns.
-        // Back from the main screen must exit instead of exposing it unexpectedly.
-        finishAffinity()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -186,6 +181,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
     }
 
     if (!unlocked) {
+        BackHandler { activity.finishAffinity() }
         DiaryUnlockScreen(lock,
             onUnlock = { DiarySessionGate.unlock(); unlocked = true },
             onBiometric = { onError ->
@@ -195,6 +191,25 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                 )
             })
         return
+    }
+    // The Android 16 back gesture bypasses legacy Activity.onBackPressed().
+    // Keep the previous screen-specific destinations and avoid accidentally
+    // revealing the retained UniverseActivity behind MainActivity.
+    BackHandler {
+        when (currentTab) {
+            "home" -> activity.finishAffinity()
+            "protected" -> currentTab = "cloudHub"
+            "privacy" -> currentTab = "settings"
+            "cloudHub" -> currentTab = "settings"
+            "cloud" -> {
+                cloudWelcome.edit().putBoolean("google_welcome_seen", true).apply()
+                currentTab = cloudBackTab
+            }
+            "yandex" -> currentTab = "cloudHub"
+            "drive" -> currentTab = driveBackTab
+            "profile" -> currentTab = profileBackTab
+            else -> currentTab = "home"
+        }
     }
     // Receive navigation after the PIN gate, including after a restored Activity.
     // No saved PIN-unlocked state or duplicated WebView is needed.
@@ -313,6 +328,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                             onMotionChange(enabled)
                         }
                     )
+                    "privacy" -> PrivacyPolicyScreen(onBack = { currentTab = "settings" })
                     "protected" -> ProtectedBackupScreen(
                         onBack = { currentTab = "cloudHub" },
                         onAppearanceRestored = { id, enabled ->
@@ -375,6 +391,7 @@ private fun QuietMomentsApp(themeId: String, onSelectTheme: (String) -> Unit,
                         onOpenDiary = { currentTab = "diary" },
                         onOpenTransfer = { currentTab = "transfer" },
                         onOpenCloudHub = { currentTab = "cloudHub" },
+                        onOpenPrivacy = { currentTab = "privacy" },
                         onOpenProfile = { profileBackTab = "settings"; currentTab = "profile" },
                         themeId = themeId, onSelectTheme = onSelectTheme,
                         motionEnabled = motionEnabled, onMotionChange = onMotionChange)
@@ -750,6 +767,7 @@ private fun DashboardTile(
 @Composable
 private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
     onOpenTransfer: () -> Unit, onOpenCloudHub: () -> Unit,
+    onOpenPrivacy: () -> Unit,
     onOpenProfile: () -> Unit,
     themeId: String, onSelectTheme: (String) -> Unit,
     motionEnabled: Boolean, onMotionChange: (Boolean) -> Unit) {
@@ -827,9 +845,24 @@ private fun DiarySettingsPage(lock: DiaryPinLock, onOpenDiary: () -> Unit,
             }
         }
         DiarySectionCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.PrivacyTip, contentDescription = null,
+                    tint = palette.primary)
+                Spacer(Modifier.width(10.dp))
+                Text("Политика конфиденциальности",
+                    style = MaterialTheme.typography.titleMedium)
+            }
+            Text("Как хранятся воспоминания, когда используются облачные копии " +
+                "и какие данные защищает PIN.",
+                style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = onOpenPrivacy, modifier = Modifier.fillMaxWidth()) {
+                Text("Открыть политику · RU / EN")
+            }
+        }
+        DiarySectionCard {
             Text("О приложении", style = MaterialTheme.typography.titleMedium)
             Text("Тихие моменты · Моя вселенная", style = MaterialTheme.typography.bodyLarge)
-            Text("v2.8.4 · смена Яндекс-аккаунта", style = MaterialTheme.typography.bodySmall)
+            Text("v3.0.1 · подготовка к Google Play", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

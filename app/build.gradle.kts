@@ -12,8 +12,8 @@ android {
         targetSdk = 36
         // Public OAuth client identifier; no secret or user credentials are bundled.
         manifestPlaceholders["YANDEX_CLIENT_ID"] = "51b8d2a4853c4d2ba4a908cebd748281"
-        versionCode = 300
-        versionName = "3.0.0-play-preparation"
+        versionCode = 301
+        versionName = "3.0.1-play-compliance"
     }
     val stableSigningPath = System.getenv("QM_KEYSTORE_PATH")
     signingConfigs {
@@ -32,7 +32,7 @@ android {
     buildTypes {
         debug {
             // Install preview beside existing versions; never replace private data without a stable key.
-            applicationIdSuffix = ".preview300"
+            applicationIdSuffix = ".preview301"
             versionNameSuffix = "-preview"
         }
         release {

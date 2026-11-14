@@ -1,7 +1,7 @@
 plugins { id("com.android.library") }
 android {
     namespace = "com.quietmoments.universe"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig { minSdk = 26 }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -11,4 +11,5 @@ android {
 
 dependencies {
     implementation("androidx.core:core:1.15.0")
+    implementation("androidx.activity:activity:1.9.3")
 }

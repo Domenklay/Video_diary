@@ -285,7 +285,7 @@ class LocalMediaRepository(private val context: Context, uid: String) {
                                 metadata = zip.readBytesLimited(2_000_000).toString(Charsets.UTF_8)
                             } else if (entry.name.matches(Regex("media/[A-Za-z0-9_-]+\\.(mp4|img)"))) {
                                 val target = File(staging, entry.name.substringAfterLast('/'))
-                                target.outputStream().use { output -> zip.copyToLimited(output, 500L * 1024 * 1024) }
+                                target.outputStream().use { output -> zip.copyToLimited(output, BackupArchive.MAX_SINGLE_MEDIA) }
                                 totalMediaSize += target.length()
                                 require(totalMediaSize <= 2L * 1024 * 1024 * 1024) { "Слишком большой архив" }
                             }

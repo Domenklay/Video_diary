@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,19 +56,27 @@ fun DiaryUnlockScreen(lock: DiaryPinLock, onUnlock: () -> Unit,
     var code by remember { mutableStateOf("") }
     var showPin by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
-    var failures by remember { mutableIntStateOf(0) }
+    var lockoutMs by remember { mutableLongStateOf(lock.unlockDelayRemainingMs()) }
+    LaunchedEffect(lock) {
+        while (true) {
+            lockoutMs = lock.unlockDelayRemainingMs()
+            delay(1_000L)
+        }
+    }
 
     fun openDiary() {
-        if (code.length < 6 || failures >= 5) return
-        val valid = runCatching { lock.verify(code) }.getOrDefault(false)
+        lockoutMs = lock.unlockDelayRemainingMs()
+        if (code.length < 6 || lockoutMs > 0) return
+        val valid = runCatching { lock.verifyForUnlock(code) }.getOrDefault(false)
         if (valid) {
             code = ""
             error = ""
             onUnlock()
         } else {
-            failures++
-            error = if (failures >= 5)
-                "Слишком много попыток. Закрой приложение и попробуй позднее."
+            lockoutMs = lock.unlockDelayRemainingMs()
+            error = if (lockoutMs > 0L)
+                "Слишком много попыток. PIN временно заблокирован, " +
+                    "вход откроется автоматически после ожидания."
             else "Неверный PIN. Проверь цифры и попробуй ещё раз."
             code = ""
         }
@@ -82,7 +91,7 @@ fun DiaryUnlockScreen(lock: DiaryPinLock, onUnlock: () -> Unit,
             listOf(Color(0xB5211235), Color(0x99211236), Color(0xD51B112B)))))
         LivingThemeParticles(palette, Modifier.matchParentSize(), strength = .7f)
         Column(
-            modifier = Modifier.fillMaxSize().imePadding()
+            modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -161,7 +170,7 @@ fun DiaryUnlockScreen(lock: DiaryPinLock, onUnlock: () -> Unit,
                             value = code,
                             onValueChange = {
                                 code = it.filter(Char::isDigit).take(16)
-                                if (error.isNotBlank() && failures < 5) error = ""
+                                if (error.isNotBlank() && lockoutMs == 0L) error = ""
                             },
                             label = { Text("PIN-код") },
                             placeholder = { Text("6–16 цифр") },
@@ -198,6 +207,14 @@ fun DiaryUnlockScreen(lock: DiaryPinLock, onUnlock: () -> Unit,
                                 cursorColor = palette.primary
                             )
                         )
+                        if (lockoutMs > 0L) {
+                            Text(
+                                "Повторить ввод PIN можно через " +
+                                    "${((lockoutMs + 999L) / 1000L)} сек.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.primary
+                            )
+                        }
                         if (error.isNotBlank()) {
                             Surface(
                                 color = MaterialTheme.colorScheme.errorContainer,
@@ -211,7 +228,7 @@ fun DiaryUnlockScreen(lock: DiaryPinLock, onUnlock: () -> Unit,
                         }
                         Button(
                             onClick = { openDiary() },
-                            enabled = code.length >= 6 && failures < 5,
+                            enabled = code.length >= 6 && lockoutMs == 0L,
                             modifier = Modifier.fillMaxWidth().height(54.dp),
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(

@@ -23,7 +23,13 @@ assert "universeLauncher" not in main
 navigation = java.split("private final class AppNavigationBridge", 1)[1].split("private final class StorageBridge", 1)[0]
 assert "navigateToNative(" in navigation
 assert "finish();" not in navigation
-back = java.split("@Override public void onBackPressed()", 1)[1].split("@Override protected void onDestroy()", 1)[0]
+# Android 16 requires predictive-back-compatible callbacks, not the removed
+# Activity.onBackPressed() override. Preserve native handoff on the root page.
+assert "getOnBackPressedDispatcher().addCallback" in java
+assert "new OnBackPressedCallback(true)" in java
+assert "@Override public void onBackPressed()" not in java
+back = java.split("private void navigateBackInsideUniverse()", 1)[1].split("@Override protected void onDestroy()", 1)[0]
 assert "navigateToNative(" in back
+assert "web.evaluateJavascript(" in back
 
 print("Universe fast navigation contracts: OK")
