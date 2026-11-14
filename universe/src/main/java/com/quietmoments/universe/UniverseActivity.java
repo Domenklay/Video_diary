@@ -1,6 +1,7 @@
 package com.quietmoments.universe;
 
-import android.app.Activity;
+import androidx.activity.ComponentActivity;
+import androidx.activity.OnBackPressedCallback;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import android.util.AtomicFile;
@@ -25,7 +26,7 @@ import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 
 /** Embedded, offline universe screen. Does not access host diary database. */
-public final class UniverseActivity extends Activity {
+public final class UniverseActivity extends ComponentActivity {
     public static final String RESULT_DATE = "com.quietmoments.universe.DATE";
     public static final String RESULT_ACTION = "com.quietmoments.universe.ACTION";
     private static final int EXPORT_JSON = 7011;
@@ -82,6 +83,11 @@ public final class UniverseActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        // Android 16 no longer calls Activity.onBackPressed() for predictive
+        // navigation. Use the lifecycle-aware dispatcher on all supported APIs.
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() { navigateBackInsideUniverse(); }
+        });
         getWindow().setStatusBarColor(Color.rgb(21,19,34));
         getWindow().setNavigationBarColor(Color.rgb(21,19,34));
         keepSystemNavigationHidden();
@@ -374,8 +380,11 @@ public final class UniverseActivity extends Activity {
         }
     }
 
-    @Override public void onBackPressed() {
-        if (web == null) { super.onBackPressed(); return; }
+    private void navigateBackInsideUniverse() {
+        if (web == null) {
+            navigateToNative("NAVIGATE_HOME", null);
+            return;
+        }
         web.evaluateJavascript("(typeof route !== 'undefined' && route !== 'home') ? 'subpage' : 'home'", result -> {
             if ("\"subpage\"".equals(result)) web.evaluateJavascript("go('home')", null);
             else navigateToNative("NAVIGATE_HOME", null);
